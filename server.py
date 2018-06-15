@@ -130,7 +130,6 @@ class Handler(BaseHTTPRequestHandler):
                 realcommandName = commandName.rsplit('o', 1)[0]
                 print(status, realcommandName)
                 if 'n' in status:
-<<<<<<< HEAD
                     result = setStatus(realcommandName, '1',deviceName)
                 elif 'ff' in status:
                     result = setStatus(realcommandName, '0',deviceName)
@@ -139,12 +138,6 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 result = sendCommand(commandName, deviceName)
                 print ("SendCommand result: %s" % result)
-=======
-                    setStatus(realcommandName, '1', deviceName)
-                elif 'ff' in status:
-                    setStatus(realcommandName, '0', deviceName)
-            result = getStatus(realcommandName, deviceName)
->>>>>>> d066c954d32f6674ac9aac1ed3ecb9f7d8b38b83
             if result == False:
                 response = "Failed: Unknown command"
             else:
@@ -175,7 +168,6 @@ class Handler(BaseHTTPRequestHandler):
                 status = paths[3]
             result = setStatus(commandName, status, deviceName)
             if (result):
-<<<<<<< HEAD
                 response = '''{ "%s": "%s" }''' % (commandName, result)
             else:
                 response = "Failed: Unknown command"
@@ -189,8 +181,6 @@ class Handler(BaseHTTPRequestHandler):
                 deviceName = None
             status = toggleStatus(commandName, deviceName)
             if (status):
-=======
->>>>>>> d066c954d32f6674ac9aac1ed3ecb9f7d8b38b83
                 response = '''{ "%s": "%s" }''' % (commandName, status)
             else:
                 response = "Failed: Unknown command"
@@ -210,7 +200,7 @@ class Handler(BaseHTTPRequestHandler):
                             break
             result = getSensor(sensor, deviceName)
             if result == False:
-                response = "Failed to get data"
+                reponse = "Failed to get data"
             else:
                 if sensor == 'temperature' or sensor == 'humidity':
                     response = '''{ "%s": %s }''' % (sensor, result)
@@ -327,7 +317,6 @@ def setStatus(commandName, status, deviceName=None):
         settingsFile.set(sectionName, commandName, status)
         settingsFile.write(broadlinkControlIniFile)
         broadlinkControlIniFile.close()
-<<<<<<< HEAD
         if settingsFile.has_section("SET "+commandName):
             if settingsFile.has_option("SET "+commandName, "trigger"):
                 rawcommand = settingsFile.get("SET "+commandName, "trigger")
@@ -336,9 +325,6 @@ def setStatus(commandName, status, deviceName=None):
             else:
                 print("SET %s: A trigger is required" + commandName)
         return getStatus(commandName,deviceName)
-=======
-        return True
->>>>>>> d066c954d32f6674ac9aac1ed3ecb9f7d8b38b83
     except StandardError as e:
         print ("Error writing settings file: %s" % e)
         restoreSettings()
