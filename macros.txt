@@ -1,0 +1,166 @@
+MACRO LANGUAGE
+--------------
+
+INTRO
+
+The new macro language is considered experimental.  Not all functions have
+been tested.  The system is based on virtual commands.  In addition to the
+macro language, a new "action" has been defined, "toggleStatus" which works
+like "getStatus" and "setStatus" combined.
+
+A "Command" is a single word, normally the parameter of a "sendCommand". It
+may be a virtual command or actual IR data.
+
+Virtual commands are defined like normal, in either the global or per-device
+"Commands" section.  List the virtual command name as the lvalue and as the
+right value you may use an instruction such as:
+    PRINT   Prints the string, which may contain $deviceName or other vars
+    SET     And a single variable to set to 1
+    CLEAR   And a single variable to set to 0
+    TOGGLE  And a single variable to set to toggle
+    MACRO   Followed by a list of commands.  Any command may be followed by
+            a comma and a repeat count.  You may also use the virtual "sleep"
+            commands (sleep, sleep2, sleep3, etc) to pause for a set number
+            of seconds.  The list is space separated.
+
+Any other "rvalue" should be either a real IR code or a command defined
+elsewhere.  You may define commands in either the command section, or using
+a special section.
+
+
+VARIABLES
+
+The Status section is now made up of both a global and a per-device section,
+depending on the URL used.  It is not restricted to just 0 or 1 values.  The
+status section now allows storage variables for logical expressions.
+
+
+SECTIONS
+
+Special sections start with a keyword, a space, and the name of the virtual
+command which you want to define.  Parameters to the device are listed as
+values in the section.
+
+The following keywords are defined
+
+    WOL     This section is used to send a WOL packet to a host.
+        mac     the mac address to send the packet to
+        ip      the ip address to send the packet to
+        port    optional (defaults to 7)
+
+    TEST    The command will test a variable.  It must be single on/off value,
+            0 or 1.  Depending on the value, either the "on" or "off" branches
+            are executed.  The "test" variable may also be a sensor name!
+        on      command if the variable is on
+        off     command if the variable is off
+
+    SET     Defines a trigger to run when a variable changes.  This should be
+            a TEST or LOGIC section normally
+        trigger Name of the section to run when variable is set
+
+    CHECK   Sends a PING to a host to see if it's up.  If the host is up, the
+            host is considered to be "on", else it's "off".  You could use a
+            WOL section to try to turn it on, or turn it on with an IR command
+            defined in "Commands"
+        host    IP or hostname of the host to ping
+        on      command to run when host is up
+        off     command to run when host is down
+
+
+The LOGIC Section is the ultimate / universal conditional.  It can take many
+forms, so we'll devote a bit more area to this one:
+        test    The variable name to test is not optional
+        compare If a compare variable is listed, it's compared with the test.
+
+If there is no compare, the value of "test" can be 0 or 1, which will trigger
+        on      This is executed if the variable is a 1 or "on"
+        off     This is executed if the variable is a 0 or "off"
+
+The value of "test" may also be a single word string.  If a matching value is
+found, it will be executed.  For example, if the "test" value is the sensor
+"lights", and it returns a value of "dark", then the "dark = " line will
+tell the system what command to go to next!
+
+If the test is numeric, it might be positive or negative or zero.  It may also
+be compared to "compare" resulting in a value that is positive or negative,
+meaning the test is less, more, or equal to the compare value
+        neg     Test is negative
+        less    Compare is less than the test
+        pos     Test  is positive
+        more    Compare is more than the test
+        zero    Test is zero (and "off" is not listed)
+        equal   Branch if the compare equals test
+        else    If none of the above, run else
+        error   An exception occured
+
+NOTE: You can use a LOGIC section to perform loops and other controls
+
+
+EXAMPLE#1
+
+Let's say you want to keep track of the status of a device, to refer to it.
+
+[Commands]
+ac78deg = xxxxxxxxxxxxx-IR-CODES-xxxxxxxxxxxxxx
+ac82deg = xxxxxxxxxxxxx-IR-CODES-xxxxxxxxxxxxxx
+
+[Status]
+Ac = 0
+
+[SET Ac]
+trigger = testAcStatus
+
+[LOGIC testAcStatus]
+test = Ac
+on = ac78deg
+off = ac82deg
+
+Here, instead of turning on and off the AC with the AC codes directly, we use
+/setStatus/Acon and /setStatus/Acoff URLs.  The SET section defines code to
+trigger when the "Ac" value is changed.  The triggered code is "testAcStatus",
+a command that is defined as LOGIC which tests the Ac value and then uses
+the "on" and "off" branches to actually send the IR codes.
+
+We can now use getStatus/Ac to find out if the AC is on or not.
+
+
+EXAMPLE #2
+
+This example is bit more contrived, but shows how flexible this can be.  We'll
+make the classic "Guess A Number" game.  The person setting the number will
+use set the "target" value with /setStatus/target/X where X is the target
+number.  The person that wants to guess the number will set their guess with
+/setStatus/guess/X   We'll use PRINT statements to return values in JSON
+
+[LOGIC GuessNumber]
+test = guess
+compare = target
+less = PRINT higher
+more = PRINT lower
+equal = PRINT You guessed it
+
+[SET guess]
+trigger = GuessNumber
+
+[SET target]
+trigger = PRINT Value set!
+
+The "SET target" line just returns a string for demo purposes and doesn't do
+anything special.  The "SET guess" line causes a conditional to be triggered
+when the "guess" is set.  The user will get one of the printed lines hinting
+about what value to guess next.
+
+
+CONCLUSION
+
+This is just a server framework.  It should be complemented with appropriate
+logic elsewhere, such as javascript.  By allowing the REST server to make
+conditional statements based on persistent state, a much wider variety of
+control is possible.  With "Status" sections as variables, Commands expanded
+to MACROs as sequential blocks of code, and LOGIC sections for conditions
+and loops, a complete programming language is available.  In addition to
+sending IR codes, we can test hosts and send WOL packets to wake them.  The
+trigger mechanism provides for an easy way to execute code and set values
+at the same time.
+
+
