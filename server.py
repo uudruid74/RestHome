@@ -9,6 +9,7 @@ import socket
 import errno
 import json
 import shutil
+import macros
 from os import path
 from Crypto.Cipher import AES
 
@@ -129,14 +130,18 @@ class Handler(BaseHTTPRequestHandler):
                 realcommandName = commandName.rsplit('o', 1)[0]
                 print(status, realcommandName)
                 if 'n' in status:
-                    setStatus(realcommandName, '1', True)
+                    result = setStatus(realcommandName, '1',deviceName)
                 elif 'ff' in status:
-                    setStatus(realcommandName, '0', True)
-            result = sendCommand(commandName, deviceName)
+                    result = setStatus(realcommandName, '0',deviceName)
+                if result:
+                    result = '''{ "%s": "%s" }''' % (realcommandName,result)
+            else:
+                result = sendCommand(commandName, deviceName)
+                print ("SendCommand result: %s" % result)
             if result == False:
                 response = "Failed: Unknown command"
             else:
-                response = "Sent: %s" % commandName
+                response = result
 
         elif 'getStatus' in self.path:
             if paths[2] == 'getStatus':
@@ -145,18 +150,12 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
-            if 'temp' in commandName:   # Should likely use getSensor instead
-                result = getSensor("temperature",deviceName)
-                if result == False:
-                    response = "Failed: Cannot get temperature"
-                else:
-                    response = '''{ "temperature": %s } ''' % result
+
+            status = getStatus(commandName,deviceName)
+            if (status):
+                response = '''{ "%s": "%s" }''' % (commandName,status)
             else:
-                status = getStatus(commandName,deviceName)
-                if (status):
-                    response = status
-                else:
-                    response = "Failed: Unknown command"
+                response = "Failed: Unknown command"
 
         elif 'setStatus' in self.path:
             if paths[2] == 'setStatus':
@@ -169,7 +168,20 @@ class Handler(BaseHTTPRequestHandler):
                 status = paths[3]
             result = setStatus(commandName, status, deviceName)
             if (result):
-                reponse = '''{ "%s": "%s" }''' % (commandName, status)
+                response = '''{ "%s": "%s" }''' % (commandName, result)
+            else:
+                response = "Failed: Unknown command"
+
+        elif 'toggleStatus' in self.path:
+            if paths[2] == 'toggleStatus':
+                commandName = paths[3]
+                deviceName = paths[1]
+            else:
+                commandName = paths[2]
+                deviceName = None
+            status = toggleStatus(commandName, deviceName)
+            if (status):
+                response = '''{ "%s": "%s" }''' % (commandName, status)
             else:
                 response = "Failed: Unknown command"
 
@@ -196,12 +208,12 @@ class Handler(BaseHTTPRequestHandler):
                     response = '''{ "%s": "%s" }''' % (sensor, result)
         else:
             response = "Failed"
-        if "Failed" in response:
+        if "Failed" in response or "error" in response:
             self.wfile.write('''{ "error": "%s" }''' % response)
-        elif "Sent" in response:
-            self.wfile.write('''{ "ok": "%s" }''' % response)
+        elif response.startswith('{'):
+            self.wfile.write(response)
         else:
-            self.wfile.write (response);
+            self.wfile.write('''{ "ok": "%s" }''' % response)
         print ("\t"+response)
 
 def sendCommand(commandName,deviceName):
@@ -212,55 +224,39 @@ def sendCommand(commandName,deviceName):
         device = DeviceByName[deviceName];
         serviceName = deviceName + ' Commands'
 
-    deviceKey = device.key
-    deviceIV = device.iv
+    print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
+    newCommand = commandName
+    if commandName.strip() != '':
+        result = macros.checkMacros(commandName,deviceName)
+        print ("Macro Result: %s = %s" % (commandName,result))
+        if result:
+            return result
+        elif settingsFile.has_option(serviceName, commandName):
+            newCommand = settingsFile.get(serviceName, commandName)
+        elif settingsFile.has_option('Commands', commandName):
+            newCommand = settingsFile.get('Commands', commandName)
 
-    if settingsFile.has_option(serviceName, commandName):
-        commandFromSettings = settingsFile.get(serviceName, commandName)
-    elif settingsFile.has_option('Commands', commandName):
-        commandFromSettings = settingsFile.get('Commands', commandName)
-    else:
-        return False
+        result = macros.checkConditionals(newCommand,deviceName)
+        print ("checkCond result: %s = %s" % (newCommand,result))
+        if result:
+            return result
 
-    if commandFromSettings.strip() != '':
-        if commandFromSettings.startswith("MACRO "):
-            for command in commandFromSettings.strip().split():
-                if command == "sleep":
-                    time.sleep(1)
-                    continue
-                if "," in command:
-                    try:
-                        (actualCommand, repeatAmount) = command.split(',')
-                        for x in range(0,int(repeatAmount)):
-                            if actualCommand == "sleep":
-                                time.sleep(1)
-                            else:
-                                sendCommand(actualCommand,deviceName)
-                    except:
-                        print ("Skipping malformed command: %s" % command)
-                    continue
-                if command.startswith("sleep"):
-                    try:
-                        time.sleep(int(command[5:]))
-                    except:
-                        print ("Invalid sleep time: %s" % command)
-                        time.sleep(2)
-                else:
-                    sendCommand(command,deviceName)
+        deviceKey = device.key
+        deviceIV = device.iv
 
-            return True
-        decodedCommand = binascii.unhexlify(commandFromSettings)
+        decodedCommand = binascii.unhexlify(newCommand)
         AESEncryption = AES.new(str(deviceKey), AES.MODE_CBC, str(deviceIV))
         encodedCommand = AESEncryption.encrypt(str(decodedCommand))
 
         finalCommand = encodedCommand[0x04:]
 
-    try:
-        device.send_data(finalCommand)
-    except Exception:
-        print ("Probably timed out..")
-    return True
-
+        try:
+            device.send_data(finalCommand)
+        except Exception:
+            return "Probably timed out.."
+        return "Sent: %s" % commandName
+    else:
+        return False
 
 def learnCommand(commandName, deviceName=None):
     if deviceName == None:
@@ -301,13 +297,13 @@ def learnCommand(commandName, deviceName=None):
         settingsFile.set(sectionName, commandName, decodedCommand)
         settingsFile.write(broadlinkControlIniFile)
         broadlinkControlIniFile.close()
-        return True
+        return commandName
     except StandardError as e:
         print("Error writing settings file: %s" % e)
         restoreSettings()
         return False
 
-def setStatus(commandName, status, exist=False, deviceName=None):
+def setStatus(commandName, status, deviceName=None):
     if deviceName == None:
         sectionName = 'Status'
     else:
@@ -317,25 +313,18 @@ def setStatus(commandName, status, exist=False, deviceName=None):
     try:
         if not settingsFile.has_section(sectionName):
             settingsFile.add_section(sectionName)
-        if exist:
-            broadlinkControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
-            settingsFile.set(sectionName, commandName, status)
-            settingsFile.write(broadlinkControlIniFile)
-            broadlinkControlIniFile.close()
-            return True
-
-        if settingsFile.has_option(sectionName, commandName):
-            commandFromSettings = settingsFile.get(sectionName, commandName)
-        else:
-            return False
-        if commandFromSettings.strip() != '':
-            broadlinkControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
-            settingsFile.set(sectionName, commandName, status)
-            settingsFile.write(broadlinkControlIniFile)
-            broadlinkControlIniFile.close()
-            return True
-        else:
-            return False
+        broadlinkControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
+        settingsFile.set(sectionName, commandName, status)
+        settingsFile.write(broadlinkControlIniFile)
+        broadlinkControlIniFile.close()
+        if settingsFile.has_section("SET "+commandName):
+            if settingsFile.has_option("SET "+commandName, "trigger"):
+                rawcommand = settingsFile.get("SET "+commandName, "trigger")
+                print ("Trigger = %s" % rawcommand)
+                return sendCommand(rawcommand,deviceName)
+            else:
+                print("SET %s: A trigger is required" + commandName)
+        return getStatus(commandName,deviceName)
     except StandardError as e:
         print ("Error writing settings file: %s" % e)
         restoreSettings()
@@ -350,22 +339,41 @@ def getStatus(commandName, deviceName=None):
     if settingsFile.has_option(sectionName,commandName):
         status = settingsFile.get(sectionName, commandName)
         return status
+    status = getSensor(commandName,deviceName)
+    if status:
+        return status
     else:
+        print ("Can't find %s %s" % (sectionName, commandName))
         return False
+
+def toggleStatus(commandName, deviceName=None):
+    print (deviceName)
+    status = getStatus(commandName,deviceName)
+    print ("Status = %s" % status)
+    try:
+        if status == "0":
+            return setStatus(commandName,"1",deviceName)
+    except:
+        pass
+    return setStatus(commandName,"0",deviceName)
 
 def getSensor(sensorName,deviceName=None):
     if deviceName == None:
         device = devices[0]
     else:
         device = DeviceByName[deviceName];
-    if "RM" in device.type.upper() and "temp" in sensorName:
-        temperature = device.check_temperature()
-        if temperature:
-            return temperature
-    if "A1" in device.type.upper():
-        result = device.check_sensors()
-        if result:
-            return result[sensorName]
+    try:
+        print ("Checking sensors %s %s" % (sensorName,deviceName))
+        if "RM" in device.type.upper() and "temp" in sensorName:
+            temperature = device.check_temperature()
+            if temperature:
+                return temperature
+        if "A1" in device.type.upper():
+            result = device.check_sensors()
+            if result:
+                return result[sensorName]
+    except:
+        pass    #- Ignore errors and just return false
     return False
 
 def start(server_class=Server, handler_class=Handler, port=8080, listen='0.0.0.0', timeout=1):
@@ -376,12 +384,11 @@ def start(server_class=Server, handler_class=Handler, port=8080, listen='0.0.0.0
     while not InterruptRequested:
         httpd.handle_request()
 
-
 def backupSettings():
     shutil.copy2(settings.settingsINI,settings.settingsINI+".bak")
 
 def restoreSettings():
-    if os.path.isfile(settings.settingsINI+".bak"):
+    if path.isfile(settings.settingsINI+".bak"):
         shutil.copy2(settings.settingsINI+".bak",settings.settingsINI)
     else:
         print ("Can't find backup to restore!  Refusing to make this worse!")
@@ -537,6 +544,7 @@ if __name__ == "__main__":
     while not ShutdownRequested:
         serverParams = readSettingsFile()
         InterruptRequested = False
+        macros.init_callbacks(settingsFile,sendCommand,getStatus)
         start(**serverParams)
         if not ShutdownRequested:
             reload(settings)

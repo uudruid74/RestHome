@@ -16,8 +16,15 @@ if settings.has_option('General', 'Timeout'):
 DevList = []
 Dev = defaultdict(dict)
 for section in settings.sections():
+    #- Special sections, not a device
     if section == 'General' or 'Commands' in section or 'Status' in section:
         continue
+    #- Special sections, control nodes
+    if section.startswith("LOGIC ") or section.startswith("SET ") or \
+            section.startswith("TEST ") or section.startswith("CHECK ") or \
+            section.startswith("WOL "):
+        continue
+    #- These are devices
     print ("Reading device configuration for %s" % section)
     Dev[section,'IPAddress'] = settings.get(section,'IPAddress').strip()
     Dev[section,'MACAddress'] = netaddr.EUI(settings.get(section, 'MACAddress'))
