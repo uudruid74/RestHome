@@ -215,6 +215,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.wfile.write('''{ "ok": "%s" }''' % response)
         print ("\t"+response)
+        print ""
 
 def sendCommand(commandName,deviceName):
     if deviceName == None:
@@ -225,36 +226,39 @@ def sendCommand(commandName,deviceName):
         serviceName = deviceName + ' Commands'
 
     print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
-    newCommand = commandName
+    origCommand = commandName
     if commandName.strip() != '':
+        result = macros.checkConditionals(commandName,deviceName)
+        print ("checkCond result: %s = %s" % (commandName,result))
+        if result:
+            return result
+        if settingsFile.has_option(serviceName, commandName):
+            commandName = settingsFile.get(serviceName, commandName)
+        elif settingsFile.has_option('Commands', commandName):
+            commandName = settingsFile.get('Commands', commandName)
+
         result = macros.checkMacros(commandName,deviceName)
         print ("Macro Result: %s = %s" % (commandName,result))
         if result:
             return result
-        elif settingsFile.has_option(serviceName, commandName):
-            newCommand = settingsFile.get(serviceName, commandName)
-        elif settingsFile.has_option('Commands', commandName):
-            newCommand = settingsFile.get('Commands', commandName)
 
-        result = macros.checkConditionals(newCommand,deviceName)
-        print ("checkCond result: %s = %s" % (newCommand,result))
-        if result:
-            return result
+        try:
+            deviceKey = device.key
+            deviceIV = device.iv
 
-        deviceKey = device.key
-        deviceIV = device.iv
+            decodedCommand = binascii.unhexlify(commandName)
+            AESEncryption = AES.new(str(deviceKey), AES.MODE_CBC, str(deviceIV))
+            encodedCommand = AESEncryption.encrypt(str(decodedCommand))
 
-        decodedCommand = binascii.unhexlify(newCommand)
-        AESEncryption = AES.new(str(deviceKey), AES.MODE_CBC, str(deviceIV))
-        encodedCommand = AESEncryption.encrypt(str(decodedCommand))
-
-        finalCommand = encodedCommand[0x04:]
+            finalCommand = encodedCommand[0x04:]
+        except:
+            return False    #- No such command
 
         try:
             device.send_data(finalCommand)
         except Exception:
             return "Probably timed out.."
-        return "Sent: %s" % commandName
+        return origCommand
     else:
         return False
 

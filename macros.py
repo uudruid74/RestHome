@@ -1,11 +1,17 @@
 import wol
 import string
+import time
 from platform import system as system_name
 import subprocess
 
+def append(a,b):
+    if a.strip() == '':
+        return b
+    else:
+        return ' '.join([a,b])
+
 def checkMacros(commandFromSettings, deviceName):
     print ("checkMacros %s %s" % (commandFromSettings,deviceName))
-    result = ''
     if commandFromSettings.startswith("PRINT "):
         return string.Template(commandFromSettings[6:]).substitute(locals())
     elif commandFromSettings.startswith("SET "):
@@ -15,12 +21,15 @@ def checkMacros(commandFromSettings, deviceName):
     elif commandFromSettings.startswith("TOGGLE "):
         return toggleStatus(commandFromSettings[7:],deviceName)
     elif commandFromSettings.startswith("MACRO "):
-        for command in commandFromSettings.strip().split():
+        result = ''
+        for command in commandFromSettings[6:].strip().split():
             print ("Executing %s" % command)
             if command == "sleep":
                 time.sleep(1)
+                result = append(result,command)
                 continue
             if "," in command:
+                result = append(result,command)
                 try:
                     (actualCommand, repeatAmount) = command.split(',')
                     for x in range(0,int(repeatAmount)):
@@ -32,24 +41,27 @@ def checkMacros(commandFromSettings, deviceName):
                     print ("Skipping malformed command: %s" % command)
                 continue
             if command.startswith("sleep"):
+                result = append(result,command)
                 try:
                     time.sleep(int(command[5:]))
                 except:
-                    print ("Invalid sleep time: %s" % command)
+                    print ("Invalid sleep time: %s; sleeping 2s" % command[5:])
                     time.sleep(2)
             else:
-                result += sendCommand(command,deviceName)
-                print ("Result: %s" % result)
+                newresult = sendCommand(command,deviceName)
+                if newresult:
+                    print ("Result: %s" % newresult)
+                    result = append(result,newresult)
         if result:
             return result
-        return "Sent Macro %s" % command
     else:
-        return False    #- not a macro
+        return False #- not a macro
 
 #- Wake On Lan
 def execute_wol(command,deviceName):
     section = "WOL "+command
     try:
+        port = None
         mac = settingsFile.get(section,"mac")
         ip = settingsFile.get(section,"ip")
         if settingsFile.has_option(section,"port"):

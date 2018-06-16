@@ -1,9 +1,9 @@
 # A Wake on LAN program that allows you to send magic packets over the Internet
-# This code is by Ryan Schuetzler - https://gist.github.com/rschuetzler/8854764
+# Based on code by Ryan Schuetzler https://gist.github.com/rschuetzler/8854764
 
 import socket, struct
 
-def makeMagicPacket(self, macAddress):
+def makeMagicPacket(macAddress):
     # Take the entered MAC address and format it to be sent via socket
     splitMac = str.split(macAddress,':')
 
@@ -15,21 +15,28 @@ def makeMagicPacket(self, macAddress):
                              int(splitMac[4], 16),
                              int(splitMac[5], 16))
 
-    packet = '\xff' * 6 + macAddress * 16 #create the magic packet from MAC address
+    return '\xff' * 6 + macAddress * 16
+                                    #create the magic packet from MAC address
 
-def sendPacket(self, packet, destIP, destPort = 7):
+def sendPacket(packet, destIP, destPort):
+    print ("sendPacket %s:%s" % (destIP,destPort))
     # Create the socket connection and send the packet
     s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.sendto(packet,(destIP,destPort))
     s.close()
 
-def wake(self, macAddress, destIP, destPort=7):
+def wake(macAddress, destIP, destPort=9):
+    print ("Waking %s at %s" % (destIP, macAddress))
+    macAddressStr = str(macAddress)
+    if destPort == None:
+        destPort = 9
     try:
-        makeMagicPacket(macAddress)
+        packet = makeMagicPacket(macAddressStr)
         sendPacket(packet, destIP, destPort)
         print 'Packet successfully sent to', macAddress
-        return True
-    except:
+        return "Sent"
+    except StandardError as e:
+        print ("WOL Failed: %s" % e)
         return False
 
 
