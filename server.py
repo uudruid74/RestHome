@@ -10,6 +10,8 @@ import errno
 import json
 import shutil
 import macros
+import re
+import collections
 from os import path
 from Crypto.Cipher import AES
 
@@ -31,6 +33,7 @@ class Server(HTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
+    Parameters = collections.defaultdict(lambda : ' ')
     def _set_headers(self):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
@@ -64,7 +67,8 @@ class Handler(BaseHTTPRequestHandler):
         password = ''
         try:
             content_len = int(self.headers.getheader('content-length', 0))
-            password = json.loads(self.rfile.read(content_len))['password'];
+            self.Parameters.update(json.loads(self.rfile.read(content_len)))
+            password = self.Parameters['password'];
         except:
             pass
         try:
@@ -74,7 +78,7 @@ class Handler(BaseHTTPRequestHandler):
                 print ("TRY %s != %s" % (GlobalPassword, password))
         except NameError:
                 return self.password_required()
-        print ("LSE %s != %s" % (GlobalPassword, parameters['password']))
+        print ("LSE %s != %s" % (GlobalPassword, self.Parameters['password']))
         self.password_required()
 
     def password_required(self):
@@ -96,7 +100,7 @@ class Handler(BaseHTTPRequestHandler):
             return False
 
         self._set_headers()
-        paths = self.path.split('/')
+        paths = re.split('[//&?=]+',self.path)
 
         if 'learnCommand' in self.path:
             try:
@@ -122,8 +126,10 @@ class Handler(BaseHTTPRequestHandler):
             if paths[2] == 'sendCommand':
                 deviceName = paths[1]
                 commandName = paths[3]
+                queryindex = 4
             else:
                 commandName = paths[2]
+                queryindex = 3
                 deviceName = None
             if 'on' in commandName or 'off' in commandName:
                 status = commandName.rsplit('o', 1)[1]
@@ -136,7 +142,9 @@ class Handler(BaseHTTPRequestHandler):
                 if result:
                     result = '''{ "%s": "%s" }''' % (realcommandName,result)
             else:
-                result = sendCommand(commandName, deviceName)
+                for index in xrange(queryindex,len(paths),2):
+                    self.Parameters[paths[index]] = paths[index+1]
+                result = sendCommand(commandName, deviceName, self.Parameters)
                 print ("SendCommand result: %s" % result)
             if result == False:
                 response = "Failed: Unknown command"
@@ -217,7 +225,7 @@ class Handler(BaseHTTPRequestHandler):
         print ("\t"+response)
         print ""
 
-def sendCommand(commandName,deviceName):
+def sendCommand(commandName,deviceName,params):
     if deviceName == None:
         device = devices[0]
         serviceName = 'Commands'
@@ -237,7 +245,7 @@ def sendCommand(commandName,deviceName):
         elif settingsFile.has_option('Commands', commandName):
             commandName = settingsFile.get('Commands', commandName)
 
-        result = macros.checkMacros(commandName,deviceName)
+        result = macros.checkMacros(commandName,deviceName,params)
         print ("Macro Result: %s = %s" % (commandName,result))
         if result:
             return result

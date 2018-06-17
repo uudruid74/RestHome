@@ -10,10 +10,10 @@ def append(a,b):
     else:
         return ' '.join([a,b])
 
-def checkMacros(commandFromSettings, deviceName):
+def checkMacros(commandFromSettings,deviceName,query):
     print ("checkMacros %s %s" % (commandFromSettings,deviceName))
     if commandFromSettings.startswith("PRINT "):
-        return string.Template(commandFromSettings[6:]).substitute(locals())
+        return string.Template(commandFromSettings[6:]).substitute(query)
     elif commandFromSettings.startswith("SET "):
         return setStatus(commandFromSettings[4:],"1",deviceName)
     elif commandFromSettings.startswith("CLEAR "):
@@ -21,8 +21,10 @@ def checkMacros(commandFromSettings, deviceName):
     elif commandFromSettings.startswith("TOGGLE "):
         return toggleStatus(commandFromSettings[7:],deviceName)
     elif commandFromSettings.startswith("MACRO "):
+        expandedCommand = string.Template(commandFromSettings[6:]).substitute(query)
+        commandFromSettings = expandedCommand.strip()
         result = ''
-        for command in commandFromSettings[6:].strip().split():
+        for command in commandFromSettings.split():
             print ("Executing %s" % command)
             if command == "sleep":
                 time.sleep(1)
@@ -36,7 +38,7 @@ def checkMacros(commandFromSettings, deviceName):
                         if actualCommand == "sleep":
                             time.sleep(1)
                         else:
-                            sendCommand(actualCommand,deviceName)
+                            sendCommand(actualCommand,deviceName,query)
                 except:
                     print ("Skipping malformed command: %s" % command)
                 continue
@@ -48,7 +50,7 @@ def checkMacros(commandFromSettings, deviceName):
                     print ("Invalid sleep time: %s; sleeping 2s" % command[5:])
                     time.sleep(2)
             else:
-                newresult = sendCommand(command,deviceName)
+                newresult = sendCommand(command,deviceName,query)
                 if newresult:
                     print ("Result: %s" % newresult)
                     result = append(result,newresult)
@@ -163,13 +165,13 @@ def execute_logicnode(command,deviceName):
             else:
                 return False
         else:
-            return sendCommand(newcommand,deviceName)
+            return sendCommand(newcommand,deviceName,{})
     except StandardError as e:
         print ("Exception: %s" % e)
         try:
             if settingsFile.has_option(section,"error"):
                 newcommand = settingsFile.get(section,"error")
-            return sendCommand(newcommand,deviceName)
+            return sendCommand(newcommand,deviceName,{})
         except StandardError as e:
             print ("Failed: %s" % e)
         return False

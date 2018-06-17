@@ -14,7 +14,7 @@ may be a virtual command or actual IR data.
 Virtual commands are defined like normal, in either the global or per-device
 "Commands" section.  List the virtual command name as the lvalue and as the
 right value you may use an instruction such as:
-    PRINT   Prints the string, which may contain $deviceName or other vars
+    PRINT   Prints the string, which may contain URL parameters
     SET     And a single variable to set to 1
     CLEAR   And a single variable to set to 0
     TOGGLE  And a single variable to set to toggle
@@ -26,6 +26,9 @@ right value you may use an instruction such as:
 Any other "rvalue" should be either a real IR code or a command defined
 elsewhere.  You may define commands in either the command section, or using
 a special section.
+
+SPECIAL NOTE: The MACRO lines can contain variable expansions as well, so
+you can determine what code is excuted via URL query parameters
 
 
 VARIABLES
