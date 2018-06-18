@@ -10,7 +10,7 @@ def append(a,b):
     else:
         return ' '.join([a,b])
 
-def checkMacros(commandFromSettings,deviceName,query):
+def checkMacros(commandFromSettings,query,deviceName):
     print ("checkMacros %s %s" % (commandFromSettings,deviceName))
     if commandFromSettings.startswith("PRINT "):
         return string.Template(commandFromSettings[6:]).substitute(query)
@@ -38,7 +38,7 @@ def checkMacros(commandFromSettings,deviceName,query):
                         if actualCommand == "sleep":
                             time.sleep(1)
                         else:
-                            sendCommand(actualCommand,deviceName,query)
+                            sendCommand(actualCommand,query,deviceName)
                 except:
                     print ("Skipping malformed command: %s" % command)
                 continue
@@ -50,7 +50,7 @@ def checkMacros(commandFromSettings,deviceName,query):
                     print ("Invalid sleep time: %s; sleeping 2s" % command[5:])
                     time.sleep(2)
             else:
-                newresult = sendCommand(command,deviceName,query)
+                newresult = sendCommand(command,query,deviceName)
                 if newresult:
                     print ("Result: %s" % newresult)
                     result = append(result,newresult)
@@ -60,7 +60,7 @@ def checkMacros(commandFromSettings,deviceName,query):
         return False #- not a macro
 
 #- Wake On Lan
-def execute_wol(command,deviceName):
+def execute_wol(command,query,deviceName):
     section = "WOL "+command
     try:
         port = None
@@ -74,7 +74,7 @@ def execute_wol(command,deviceName):
     return False
 
 #- Test a variable for true/false
-def execute_test(command,deviceName):
+def execute_test(command,query,deviceName):
     section = "TEST "+command
     try:
         valueToTest = settingsFile.get(section,"value")
@@ -85,7 +85,7 @@ def execute_test(command,deviceName):
         else:
             rawcommand = settingsFile.get(section,"off")
         print ("Raw: %s" % rawcommand)
-        return sendCommand(rawcommand,deviceName)
+        return sendCommand(rawcommand,query,deviceName)
     except StandardError as e:
         print ("Failed: %s" % e)
     return False
@@ -96,7 +96,7 @@ def ping(host):
     command = ['ping', param, '1', host]
     return subprocess.call(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE) == 0
 
-def execute_check(command,deviceName):
+def execute_check(command,query,deviceName):
     print ("Execute Check")
     section = "CHECK "+command
     try:
@@ -106,21 +106,21 @@ def execute_check(command,deviceName):
         else:
             rawcommand = settingsFile.get(section,"off")
         print ("Command will be %s" % rawcommand)
-        result = sendCommand(rawcommand,deviceName)
+        result = sendCommand(rawcommand,query,deviceName)
         return result
     except StandardError as e:
         print ("Failed: %s" % e)
     return False
 
 #- LogicNode multi-branch conditional
-def execute_logicnode(command,deviceName):
+def execute_logicnode(command,query,deviceName):
     print ("LOGIC %s %s" % (command,deviceName))
     section = "LOGIC "+command
     newcommand = None
     try:
         if settingsFile.has_option(section,"test"):
             valueToTest = settingsFile.get(section,"test")
-            value = getStatus(valueToTest,deviceName)
+            value = getStatus(valueToTest,query,deviceName)
             print ("test = %s = %s" % (valueToTest,value))
         else:
             return False    #- test value required
@@ -130,14 +130,14 @@ def execute_logicnode(command,deviceName):
         elif value.isnumeric():
             if value == "1" and settingsFile.has_option(section,"on"):
                 newcommand = settingsFile.get(section,"on")
-                return sendCommand(newcommand,deviceName)
+                return sendCommand(newcommand,query,deviceName)
             elif value == "0" and settingsFile.has_option(section,"off"):
                 newcommand = settingsFile.get(section, "off")
-                return sendCommand(newcommand,deviceName)
+                return sendCommand(newcommand,query,deviceName)
             value = float(value)
             if settingsFile.has_option(section,"compare"):
                 compareVar = settingsFile.get(section,"compare")
-                compare = float(getStatus(compareVar, deviceName))
+                compare = float(getStatus(compareVar,query,deviceName))
                 print ("compare = %s = %s" % (compareVar,compare))
             else:
                 compare = 0
@@ -165,27 +165,27 @@ def execute_logicnode(command,deviceName):
             else:
                 return False
         else:
-            return sendCommand(newcommand,deviceName,{})
+            return sendCommand(newcommand,query,deviceName)
     except StandardError as e:
         print ("Exception: %s" % e)
         try:
             if settingsFile.has_option(section,"error"):
                 newcommand = settingsFile.get(section,"error")
-            return sendCommand(newcommand,deviceName,{})
+            return sendCommand(newcommand,query,deviceName)
         except StandardError as e:
             print ("Failed: %s" % e)
         return False
 
-def checkConditionals(command,deviceName):
+def checkConditionals(command,query,deviceName):
     print("checkConditions %s %s" % (command,deviceName))
     if settingsFile.has_section("LOGIC "+command):
-        return execute_logicnode(command,deviceName)
+        return execute_logicnode(command,query,deviceName)
     elif settingsFile.has_section("TEST "+command):
-        return execute_test(command,deviceName)
+        return execute_test(command,query,deviceName)
     elif settingsFile.has_section("CHECK "+command):
-        return execute_check(command,deviceName)
+        return execute_check(command,query,deviceName)
     elif settingsFile.has_section("WOL "+command):
-        return execute_wol(command,deviceName)
+        return execute_wol(command,query,deviceName)
     else:
         return False
 

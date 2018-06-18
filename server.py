@@ -100,8 +100,12 @@ class Handler(BaseHTTPRequestHandler):
             return False
 
         self._set_headers()
-        paths = re.split('[//&?=]+',self.path)
-
+        if '?' in self.path:
+            (self.path,query) = self.path.split('?')
+            params = re.split('[&=]+',query)
+            for index in xrange(0,len(params),2):
+                self.Parameters[params[index]] = params[index+1]
+        paths = re.split('[//=]+',self.path)
         if 'learnCommand' in self.path:
             try:
                 if self.client_address[0] not in LearnFrom:
@@ -116,7 +120,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
-            result = learnCommand(commandName,deviceName)
+            result = learnCommand(commandName,self.Parameters,deviceName)
             if result == False:
                 response = "Failed: No command learned"
             else:
@@ -126,25 +130,21 @@ class Handler(BaseHTTPRequestHandler):
             if paths[2] == 'sendCommand':
                 deviceName = paths[1]
                 commandName = paths[3]
-                queryindex = 4
             else:
                 commandName = paths[2]
-                queryindex = 3
                 deviceName = None
             if 'on' in commandName or 'off' in commandName:
                 status = commandName.rsplit('o', 1)[1]
                 realcommandName = commandName.rsplit('o', 1)[0]
                 print(status, realcommandName)
                 if 'n' in status:
-                    result = setStatus(realcommandName, '1',deviceName)
+                    result = setStatus(realcommandName, '1',self.Parameters,deviceName)
                 elif 'ff' in status:
-                    result = setStatus(realcommandName, '0',deviceName)
+                    result = setStatus(realcommandName, '0',self.Parameters,deviceName)
                 if result:
                     result = '''{ "%s": "%s" }''' % (realcommandName,result)
             else:
-                for index in xrange(queryindex,len(paths),2):
-                    self.Parameters[paths[index]] = paths[index+1]
-                result = sendCommand(commandName, deviceName, self.Parameters)
+                result = sendCommand(commandName, self.Parameters, deviceName)
                 print ("SendCommand result: %s" % result)
             if result == False:
                 response = "Failed: Unknown command"
@@ -174,7 +174,7 @@ class Handler(BaseHTTPRequestHandler):
                 commandName = paths[2]
                 deviceName = None
                 status = paths[3]
-            result = setStatus(commandName, status, deviceName)
+            result = setStatus(commandName, status, self.Parameters, deviceName)
             if (result):
                 response = '''{ "%s": "%s" }''' % (commandName, result)
             else:
@@ -187,7 +187,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
-            status = toggleStatus(commandName, deviceName)
+            status = toggleStatus(commandName, self.Parameters, deviceName)
             if (status):
                 response = '''{ "%s": "%s" }''' % (commandName, status)
             else:
@@ -206,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
                         if "A1" == dev.type.upper():
                             deviceName = dev.hostname
                             break
-            result = getSensor(sensor, deviceName)
+            result = getSensor(sensor, self.Parameters, deviceName)
             if result == False:
                 reponse = "Failed to get data"
             else:
@@ -225,7 +225,7 @@ class Handler(BaseHTTPRequestHandler):
         print ("\t"+response)
         print ""
 
-def sendCommand(commandName,deviceName,params):
+def sendCommand(commandName,params,deviceName):
     if deviceName == None:
         device = devices[0]
         serviceName = 'Commands'
@@ -236,7 +236,7 @@ def sendCommand(commandName,deviceName,params):
     print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
     origCommand = commandName
     if commandName.strip() != '':
-        result = macros.checkConditionals(commandName,deviceName)
+        result = macros.checkConditionals(commandName,params,deviceName)
         print ("checkCond result: %s = %s" % (commandName,result))
         if result:
             return result
@@ -245,7 +245,7 @@ def sendCommand(commandName,deviceName,params):
         elif settingsFile.has_option('Commands', commandName):
             commandName = settingsFile.get('Commands', commandName)
 
-        result = macros.checkMacros(commandName,deviceName,params)
+        result = macros.checkMacros(commandName,params,deviceName)
         print ("Macro Result: %s = %s" % (commandName,result))
         if result:
             return result
@@ -270,7 +270,7 @@ def sendCommand(commandName,deviceName,params):
     else:
         return False
 
-def learnCommand(commandName, deviceName=None):
+def learnCommand(commandName, params, deviceName=None):
     if deviceName == None:
         device = devices[0]
         sectionName = 'Commands'
@@ -315,7 +315,7 @@ def learnCommand(commandName, deviceName=None):
         restoreSettings()
         return False
 
-def setStatus(commandName, status, deviceName=None):
+def setStatus(commandName, status, params, deviceName=None):
     if deviceName == None:
         sectionName = 'Status'
     else:
@@ -333,16 +333,16 @@ def setStatus(commandName, status, deviceName=None):
             if settingsFile.has_option("SET "+commandName, "trigger"):
                 rawcommand = settingsFile.get("SET "+commandName, "trigger")
                 print ("Trigger = %s" % rawcommand)
-                return sendCommand(rawcommand,deviceName)
+                return sendCommand(rawcommand,params,deviceName)
             else:
                 print("SET %s: A trigger is required" + commandName)
-        return getStatus(commandName,deviceName)
+        return getStatus(commandName,params,deviceName)
     except StandardError as e:
         print ("Error writing settings file: %s" % e)
         restoreSettings()
         return False
 
-def getStatus(commandName, deviceName=None):
+def getStatus(commandName, params, deviceName=None):
     if deviceName == None:
         sectionName = 'Status'
     else:
@@ -351,25 +351,25 @@ def getStatus(commandName, deviceName=None):
     if settingsFile.has_option(sectionName,commandName):
         status = settingsFile.get(sectionName, commandName)
         return status
-    status = getSensor(commandName,deviceName)
+    status = getSensor(commandName,params,deviceName)
     if status:
         return status
     else:
         print ("Can't find %s %s" % (sectionName, commandName))
         return False
 
-def toggleStatus(commandName, deviceName=None):
+def toggleStatus(commandName, params, deviceName=None):
     print (deviceName)
-    status = getStatus(commandName,deviceName)
+    status = getStatus(commandName,params,deviceName)
     print ("Status = %s" % status)
     try:
         if status == "0":
-            return setStatus(commandName,"1",deviceName)
+            return setStatus(commandName,"1",params,deviceName)
     except:
         pass
-    return setStatus(commandName,"0",deviceName)
+    return setStatus(commandName,"0",params,deviceName)
 
-def getSensor(sensorName,deviceName=None):
+def getSensor(sensorName,params,deviceName=None):
     if deviceName == None:
         device = devices[0]
     else:
