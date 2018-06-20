@@ -9,13 +9,23 @@ def append(a,b):
         return b
     else:
         return ' '.join([a,b])
-
+#-
+#- TODO - allow status vars as parameters
+#-
 def checkMacros(commandFromSettings,query,deviceName):
     print ("checkMacros %s %s" % (commandFromSettings,deviceName))
     if commandFromSettings.startswith("PRINT "):
         return string.Template(commandFromSettings[6:]).substitute(query)
     elif commandFromSettings.startswith("SET "):
         return setStatus(commandFromSettings[4:],"1",deviceName)
+    elif commandFromSettings.startswith("INC "):
+        variable = int(getStatus(commandFromSettings[4:],deviceName))
+        variable += 1
+        return setStatus(commandFromSettings[4:],variable,deviceName)
+    elif commandFromSettings.startswith("DEC "):
+        variable = int(getStatus(commandFromSettings[4:],deviceName))
+        variable -= 1
+        return setStatus(commandFromSettings[4:],variable,deviceName)
     elif commandFromSettings.startswith("CLEAR "):
         return setStatus(commandFromSettings[6:],"0",deviceName)
     elif commandFromSettings.startswith("TOGGLE "):
@@ -89,6 +99,30 @@ def execute_test(command,query,deviceName):
     except StandardError as e:
         print ("Failed: %s" % e)
     return False
+
+#- Execute shell command
+def execute_shell(command,query,deviceName):
+    print ("Run Subshell")
+
+    section = "SHELL " + command
+    parameters = None
+    if settingsFile.has_option(section,"parameters"):
+        parameters = string.Template(settingsFile.get(section,"parameters")).substitute(query)
+    if settingsFile.has_option(section,"command"):
+        command = string.Template(settingsFile.get(section,"command")).substitute(query)
+    else:
+        print ("You must specify at least a \"command\" for any SHELL command")
+    execCommand = command
+    if parameters != None:
+        execCommand = [command,parameters]
+    shell = False
+    if settingsFile.has_option(section,"shell") and settingsFile.get(section,"shell")!="False":
+        retval = subprocess.check_output(execCommand).strip()
+    else:
+        retval = subprocess.check_output(execCommand,shell=shell).strip()
+    if settingsFile.has_option(section,"store"):
+        setStatus(settingsFile.get(section,"store"),retval,deviceName)
+    return retval
 
 #- Check if a host is up
 def ping(host):
@@ -186,12 +220,14 @@ def checkConditionals(command,query,deviceName):
         return execute_check(command,query,deviceName)
     elif settingsFile.has_section("WOL "+command):
         return execute_wol(command,query,deviceName)
+    elif settingsFile.has_section("SHELL "+command):
+        return execute_shell(command,query,deviceName)
     else:
         return False
 
-def init_callbacks(settings,sendRef,getStatRef):
-    global settingsFile,sendCommand,getStatus
+def init_callbacks(settings,sendRef,getStatRef,setStatusRef):
+    global settingsFile,sendCommand,getStatus,setStatus
     settingsFile = settings
     sendCommand = sendRef
     getStatus = getStatRef
-
+    setStatus = setStatusRef

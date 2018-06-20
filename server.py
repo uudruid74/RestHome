@@ -556,7 +556,7 @@ if __name__ == "__main__":
     while not ShutdownRequested:
         serverParams = readSettingsFile()
         InterruptRequested = False
-        macros.init_callbacks(settingsFile,sendCommand,getStatus)
+        macros.init_callbacks(settingsFile,sendCommand,getStatus,setStatus)
         start(**serverParams)
         if not ShutdownRequested:
             reload(settings)
