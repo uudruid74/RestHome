@@ -229,9 +229,11 @@ def sendCommand(commandName,params,deviceName):
     if deviceName == None:
         device = devices[0]
         serviceName = 'Commands'
-    else:
+    elif deviceName in DeviceByName:
         device = DeviceByName[deviceName];
         serviceName = deviceName + ' Commands'
+    else:
+        return "Failed: No such device, %s" % deviceName
 
     print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
     origCommand = commandName
@@ -274,9 +276,11 @@ def learnCommand(commandName, params, deviceName=None):
     if deviceName == None:
         device = devices[0]
         sectionName = 'Commands'
-    else:
+    elif deviceName in DeviceByName:
         device = DeviceByName[deviceName];
         sectionName = deviceName + ' Commands'
+    else:
+        return "Failed: No such device, %s" % deviceName
 
     if OverwriteProtected and settingsFile.has_option(sectionName,commandName):
         print ("Command %s alreadyExists and changes are protected!" % commandName)
@@ -372,8 +376,11 @@ def toggleStatus(commandName, params, deviceName=None):
 def getSensor(sensorName,params,deviceName=None):
     if deviceName == None:
         device = devices[0]
+    elif deviceName in DeviceByName:
+        device = DeviceByName[deviceName]
     else:
-        device = DeviceByName[deviceName];
+        return "Failed: No such device, %s" % deviceName
+
     try:
         print ("Checking sensors %s %s" % (sensorName,deviceName))
         if "RM" in device.type.upper() and "temp" in sensorName:

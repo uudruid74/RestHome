@@ -87,4 +87,14 @@ a comma is optional.
 Note: It may be helpful to reload your changes with SIGUSR1 when developing
 macros.
 
-TODO/IDEA: Ability to test a status in the Macro and branch to another macro.
+TODO/IDEA: 
+    External Shell command
+        SH command param param
+    Timed events
+        IN 5 minuites command #- rest of command is assumed to be a macro
+        AT 5:30 PM  command #- As above
+    Schedule
+        [Schedule]
+
+
+
