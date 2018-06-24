@@ -75,10 +75,9 @@ class Handler(BaseHTTPRequestHandler):
             if GlobalPassword and GlobalPassword == password:
                 return self.messageHandler()
             else:
-                print ("TRY %s != %s" % (GlobalPassword, password))
+                print ("Password Failure: %s" % password)
         except NameError:
                 return self.password_required()
-        print ("LSE %s != %s" % (GlobalPassword, self.Parameters['password']))
         self.password_required()
 
     def password_required(self):
@@ -145,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                     result = '''{ "%s": "%s" }''' % (realcommandName,result)
             else:
                 result = sendCommand(commandName, self.Parameters, deviceName)
-                print ("SendCommand result: %s" % result)
+                # print ("SendCommand result: %s" % result)
             if result == False:
                 response = "Failed: Unknown command"
             else:
@@ -235,11 +234,11 @@ def sendCommand(commandName,params,deviceName):
     else:
         return "Failed: No such device, %s" % deviceName
 
-    print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
+    # print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
     origCommand = commandName
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params,deviceName)
-        print ("checkCond result: %s = %s" % (commandName,result))
+        # print ("checkCond result: %s = %s" % (commandName,result))
         if result:
             return result
         if settingsFile.has_option(serviceName, commandName):
@@ -248,7 +247,7 @@ def sendCommand(commandName,params,deviceName):
             commandName = settingsFile.get('Commands', commandName)
 
         result = macros.checkMacros(commandName,params,deviceName)
-        print ("Macro Result: %s = %s" % (commandName,result))
+        # print ("Macro Result: %s = %s" % (commandName,result))
         if result:
             return result
 
@@ -336,7 +335,7 @@ def setStatus(commandName, status, params, deviceName=None):
         if settingsFile.has_section("SET "+commandName):
             if settingsFile.has_option("SET "+commandName, "trigger"):
                 rawcommand = settingsFile.get("SET "+commandName, "trigger")
-                print ("Trigger = %s" % rawcommand)
+                # print ("Trigger = %s" % rawcommand)
                 return sendCommand(rawcommand,params,deviceName)
             else:
                 print("SET %s: A trigger is required" + commandName)
@@ -365,7 +364,7 @@ def getStatus(commandName, params, deviceName=None):
 def toggleStatus(commandName, params, deviceName=None):
     print (deviceName)
     status = getStatus(commandName,params,deviceName)
-    print ("Status = %s" % status)
+    # print ("Status = %s" % status)
     try:
         if status == "0":
             return setStatus(commandName,"1",params,deviceName)
@@ -382,7 +381,7 @@ def getSensor(sensorName,params,deviceName=None):
         return "Failed: No such device, %s" % deviceName
 
     try:
-        print ("Checking sensors %s %s" % (sensorName,deviceName))
+        # print ("Checking sensors %s %s" % (sensorName,deviceName))
         if "RM" in device.type.upper() and "temp" in sensorName:
             temperature = device.check_temperature()
             if temperature:
