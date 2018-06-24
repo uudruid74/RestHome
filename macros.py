@@ -16,6 +16,8 @@ def checkMacros(commandFromSettings,query,deviceName):
     print ("checkMacros %s %s" % (commandFromSettings,deviceName))
     if commandFromSettings.startswith("PRINT "):
         return string.Template(commandFromSettings[6:]).substitute(query)
+    elif commandFromSettings.startswith("SH "):
+        return shellCommand(string.Template(commandFromSettings[3:]).substitute(query))
     elif commandFromSettings.startswith("SET "):
         return setStatus(commandFromSettings[4:],"1",deviceName)
     elif commandFromSettings.startswith("INC "):
@@ -100,7 +102,19 @@ def execute_test(command,query,deviceName):
         print ("Failed: %s" % e)
     return False
 
-#- Execute shell command
+#- Execute shell command, short MACRO version
+def shellCommand(commandString):
+    (command,sep,parameters) = commandString.partition(' ')
+    execCommand = [command,parameters]
+    try:
+        retval = subprocess.check_output(execCommand,shell=False).strip()
+    except CalledProcessError as e:
+        retval = "Fail: %d; %s" % (e.returncode,e.output)
+    if len(retval) < 1:
+        retval = 'done'
+    return retval
+
+#- Execute shell command, section version, with store ability
 def execute_shell(command,query,deviceName):
     print ("Run Subshell")
 
@@ -116,12 +130,17 @@ def execute_shell(command,query,deviceName):
     if parameters != None:
         execCommand = [command,parameters]
     shell = False
-    if settingsFile.has_option(section,"shell") and settingsFile.get(section,"shell")!="False":
-        retval = subprocess.check_output(execCommand).strip()
-    else:
-        retval = subprocess.check_output(execCommand,shell=shell).strip()
-    if settingsFile.has_option(section,"store"):
-        setStatus(settingsFile.get(section,"store"),retval,deviceName)
+    try:
+        if settingsFile.has_option(section,"shell") and settingsFile.get(section,"shell")!="False":
+            retval = subprocess.check_output(execCommand).strip()
+        else:
+            retval = subprocess.check_output(execCommand,shell=shell).strip()
+        if settingsFile.has_option(section,"store"):
+            setStatus(settingsFile.get(section,"store"),retval,deviceName)
+    except CalledProcessError as e:
+        retval = "Fail: %d; %s" % (e.returncode,e.output)
+    if len(retval) < 1:
+        retval = command
     return retval
 
 #- Check if a host is up
