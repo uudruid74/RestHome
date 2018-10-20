@@ -12,6 +12,7 @@ import shutil
 import macros
 import re
 import collections
+import platform
 from os import path
 from Crypto.Cipher import AES
 
@@ -568,8 +569,9 @@ if __name__ == "__main__":
     global ShutdownRequested
     global InteruptRequested
     ShutdownRequested = False
-    signal.signal(signal.SIGUSR1,SigUsr1)
-    signal.signal(signal.SIGINT,SigInt)
+    if platform.system() != "Windows":
+        signal.signal(signal.SIGUSR1,SigUsr1)
+        signal.signal(signal.SIGINT,SigInt)
     while not ShutdownRequested:
         serverParams = readSettingsFile()
         InterruptRequested = False
