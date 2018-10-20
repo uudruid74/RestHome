@@ -19,12 +19,15 @@ class Server(HTTPServer):
     def get_request(self):
         result = None
         while result is None:
+            timeout = min(self.timeout,macros.eventList.nextEvent())
+            if timeout < 1:
+                timeout = 0
             try:
                 result = self.socket.accept()
                 result[0].setblocking(0)
-                result[0].settimeout(self.timeout)
+                result[0].settimeout(timeout)
             except socket.timeout:
-                pass
+                return
         return result
 
     def server_bind(self):
@@ -132,6 +135,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
+            result = sendCommand(commandName, self.Parameters, deviceName)
             if 'on' in commandName or 'off' in commandName:
                 status = commandName.rsplit('o', 1)[1]
                 realcommandName = commandName.rsplit('o', 1)[0]
@@ -142,8 +146,6 @@ class Handler(BaseHTTPRequestHandler):
                     result = setStatus(realcommandName, '0',self.Parameters,deviceName)
                 if result:
                     result = '''{ "%s": "%s" }''' % (realcommandName,result)
-            else:
-                result = sendCommand(commandName, self.Parameters, deviceName)
                 # print ("SendCommand result: %s" % result)
             if result == False:
                 response = "Failed: Unknown command"
@@ -400,6 +402,13 @@ def start(server_class=Server, handler_class=Handler, port=8080, listen='0.0.0.0
     httpd.timeout = timeout
     print ('\nStarting broadlink-rest server on %s:%s ...' % (listen,port))
     while not InterruptRequested:
+        timer = min(timeout,macros.eventList.nextEvent())
+        while timer < 1:
+            event = macros.eventList.pop()
+            result = sendCommand(event.command,event.params,event.deviceName)
+            print "TIMER EXPIRED - %s\n\tresult: %s" % (event.command, result)
+            timer = min(timeout,macros.eventList.nextEvent())
+        httpd.timeout = timer
         httpd.handle_request()
 
 def backupSettings():
@@ -539,6 +548,8 @@ def readSettingsFile():
                 devices.append(device)
                 print ("%s: Read %s on %s (%s)" % (devname, device.type, str(device.host[0]), device.mac))
             DeviceByName[devname] = device
+            if Dev[devname,'StartUpCommand'] != None:
+                sendCommand(Dev[devname,'StartUpCommand'],None,devname)
     return { "port": serverPort, "listen": listen_address, "timeout": GlobalTimeout }
 
 def SigUsr1(signum, frame):

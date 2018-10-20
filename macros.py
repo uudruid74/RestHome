@@ -9,6 +9,57 @@ def append(a,b):
         return b
     else:
         return ' '.join([a,b])
+
+class EventNode(object):
+    def __init__(self,name="timer",fire=1,command="PRINT No Command",params=None,deviceName=None):
+        self.name = name
+        self.created = time.time()
+        self.timestamp = self.created + fire
+        self.command = command
+        self.params = params
+        self.deviceName = deviceName
+        self.nextNode = None
+
+class EventList(object):
+    def __init__(self):
+        self.begin = None
+    def nextEvent(self):
+        if self.begin != None:
+            return self.begin.timestamp - time.time()
+        else:
+            return 86400 #- 1 day
+    def insert(self,node):
+        #- insert into empty list
+        if self.begin == None:
+            self.begin = node
+            return
+        node.nextNode = self.begin
+        #- insert into beginning
+        if self.begin == None or node.timestamp < node.nextEvent:
+            self.begin = node
+        else:
+        #- insert into middle
+            while node.nextNode.nextNode != None:
+                if node.timeStamp >= node.nextNode.timestamp:
+                    node.nextNode = node.nextNode.nextNode
+                else:
+                    node.nextNode = node
+                    node.nextNode = node.nextNode.nextNode
+                    return
+        #- insert at end
+            node.nextNode = node
+            node.nextNode = None
+    def pop(self):
+        retvalue = self.begin
+        if retvalue != None:
+            self.begin = retvalue.nextNode
+        return retvalue
+    def add(self,name,fire,command,params,device):
+        event = EventNode(name,fire,command,params,device)
+        self.insert(event)
+
+eventList = EventList()
+
 #-
 #- TODO - allow status vars as parameters
 #-
@@ -46,13 +97,13 @@ def checkMacros(commandFromSettings,query,deviceName):
                 result = append(result,command)
                 try:
                     (actualCommand, repeatAmount) = command.split(',')
-                    for x in range(0,int(repeatAmount)):
-                        if actualCommand == "sleep":
-                            time.sleep(1)
-                        else:
+                    if actualCommand == "sleep":
+                        time.sleep(float(repeatAmount))
+                    else:
+                        for x in range(0,int(repeatAmount)):
                             sendCommand(actualCommand,query,deviceName)
-                except:
-                    print ("Skipping malformed command: %s" % command)
+                except StandardError as e:
+                    print ("Skipping malformed command: %s, %s" % (command,e))
                 continue
             if command.startswith("sleep"):
                 result = append(result,command)
@@ -66,6 +117,7 @@ def checkMacros(commandFromSettings,query,deviceName):
                 if newresult:
                     # print ("Result: %s" % newresult)
                     result = append(result,newresult)
+        time.sleep(0.2)
         if result:
             return result
     else:
@@ -165,6 +217,24 @@ def execute_check(command,query,deviceName):
         print ("Failed: %s" % e)
     return False
 
+def execute_timer(command,query,deviceName):
+    section = "TIMER "+command
+    # print ("Execute TIMER: " + command)
+    try:
+        command = settingsFile.get(section,"command");
+        delay = 0
+        if settingsFile.has_option(section,"seconds"):
+            delay += int(settingsFile.get(section,"seconds"))
+        if settingsFile.has_option(section,"minutes"):
+            delay += int(settingsFile.get(section,"minutes")) * 60
+        if settingsFile.has_option(section,"hours"):
+            delay += int(settingsFile.get(section,"hours")) * 3600
+        eventList.add(command,delay,command,query,deviceName)
+        return command
+    except StandardError as e:
+        print ("Failed: %s" % e)
+    return False
+
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query,deviceName):
     # print ("LOGIC %s %s" % (command,deviceName))
@@ -241,6 +311,8 @@ def checkConditionals(command,query,deviceName):
         return execute_wol(command,query,deviceName)
     elif settingsFile.has_section("SHELL "+command):
         return execute_shell(command,query,deviceName)
+    elif settingsFile.has_section("TIMER "+command):
+        return execute_timer(command,query,deviceName)
     else:
         return False
 
@@ -250,3 +322,4 @@ def init_callbacks(settings,sendRef,getStatRef,setStatusRef):
     sendCommand = sendRef
     getStatus = getStatRef
     setStatus = setStatusRef
+

@@ -87,14 +87,22 @@ a comma is optional.
 Note: It may be helpful to reload your changes with SIGUSR1 when developing
 macros.
 
-TODO/IDEA: 
-    External Shell command
-        SH command param param
-    Timed events
-        IN 5 minuites command #- rest of command is assumed to be a macro
-        AT 5:30 PM  command #- As above
-    Schedule
-        [Schedule]
+8) Events and Timers
+Rather than a complicated amount of code to include a full scheduler into the
+system, you should schedule routine tasks with cron or other automation tool
+such as IFTTT.  These tools can run something like wget or curl to run any
+command, including virtual commands that can test variables.  Additionally,
+two additional tools have been added.
 
+The 'StartUpCommand' can be added to any device section and when the system
+starts up, that command will be run.  Again, virtual commands are allowed.
+There isn't yet an 'ExitCommand', but it could be easily added.
+
+A 'TIMER' section has been added to allow a virtual command to trigger another
+after some delay.  This is very similar to a long sleep, except that the server
+won't be kept busy and can still react to other commands.  Use this to turn
+on a device and automatically turn it back off after some delay.  It should
+compliment your cron or other scheduler nicely.  You can run TIMER commands
+from the StartUpCommand if StartUpCommand is a MACRO.
 
 

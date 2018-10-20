@@ -22,6 +22,12 @@ right value you may use an instruction such as:
             a comma and a repeat count.  You may also use the virtual "sleep"
             commands (sleep, sleep2, sleep3, etc) to pause for a set number
             of seconds.  The list is space separated.
+            TO DO: Add parameters such that command(param=xxx) will set
+            the given parameter before running the command
+    SH      Short shell command to run, $param substitution is done
+            WARNING!  $parameters are passed directly to the OS!  However,
+            shell expansions and such are NOT done.  There is no shell!
+    CANCEL  <unimplemented> TODO: Cancel a timer
 
 Any other "rvalue" should be either a real IR code or a command defined
 elsewhere.  You may define commands in either the command section, or using
@@ -69,6 +75,26 @@ The following keywords are defined
         on      command to run when host is up
         off     command to run when host is down
 
+    SHELL   Used to create commands that can be run as part of a macro that
+            be used to do other things, such as send emails, control bluetooth
+            devices, make web requests, or interface with CRON (via at/in)
+        command     The actual command to run. Warning ... you can use $param
+                    expansion here, but it's not recommended for security
+        parameters  The parameters to send to the command.  $param is expanded
+        shell       This value defaults to 'False' and if set to anything else,
+                    it will run the command through a complete subshell.  This
+                    is a security hazard!
+        store       You can set this to a variable name and the result of the
+                    command's execution will be stored in the named variable
+
+    TIMER   Used to perform another command in the future.  Just set seconds,
+            minutes, and/or hours (if you name multiple, they are added - so
+            an hour an a half is done by setting hours = 1 and minutes = 30).
+            To set a recurring event, just use a MACRO that calls the timer
+            again.
+        command     The command string to run.  Can be real or virtual.  The
+                    parameters of the command that triggered the timer are
+                    saved and used run the command
 
 The LOGIC Section is the ultimate / universal conditional.  It can take many
 forms, so we'll devote a bit more area to this one:
@@ -101,6 +127,24 @@ NOTE: You can use a LOGIC section to perform loops and other controls
 
 EXAMPLE#1
 
+This simple example demonstrates a simple macro using a timer.  You should
+always use a timer rather than very long sleep values.  A sleep value will
+cause the server to become unavailable for other uses during the sleep.  If
+this is intended, use a sleep.  If you want other commands to work, use a
+TIMER.  It's pretty simple.   In this example, the 'muteFor30' command sends
+a 'mute' command and then triggers the timer to send it again in 30 seconds.
+
+[Commands]
+mute = xxxxxxxxxxxxx-IR-CODES-xxxxxxxxxxxxxxx
+muteFor30 = MACRO mute muteIn30
+
+[TIMER muteIn30]
+seconds = 30
+command = mute
+
+
+EXAMPLE#2
+
 Let's say you want to keep track of the status of a device, to refer to it.
 
 [Commands]
@@ -127,7 +171,7 @@ the "on" and "off" branches to actually send the IR codes.
 We can now use getStatus/Ac to find out if the AC is on or not.
 
 
-EXAMPLE #2
+EXAMPLE #3
 
 This example is bit more contrived, but shows how flexible this can be.  We'll
 make the classic "Guess A Number" game.  The person setting the number will
