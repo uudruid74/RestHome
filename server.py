@@ -148,11 +148,10 @@ class Handler(BaseHTTPRequestHandler):
                     result = '''{ "%s": "%s" }''' % (realcommandName,result)
                 # print ("SendCommand result: %s" % result)
                 result = sendCommand(realcommandName, self.Parameters, deviceName)
-                
             else:
                 result = sendCommand(commandName, self.Parameters, deviceName)
             if result == False:
-                response = "Failed: Unknown command"
+                response = "Failed: Unknown command - %s" % commandName
             else:
                 response = result
 
@@ -164,11 +163,11 @@ class Handler(BaseHTTPRequestHandler):
                 commandName = paths[2]
                 deviceName = None
 
-            status = getStatus(commandName,deviceName)
+            status = getStatus(commandName,self.Parameters,deviceName)
             if (status):
                 response = '''{ "%s": "%s" }''' % (commandName,status)
             else:
-                response = "Failed: Unknown command"
+                response = "Failed: Unknown command - %s" % commandName
 
         elif 'setStatus' in self.path:
             if paths[2] == 'setStatus':
@@ -183,7 +182,7 @@ class Handler(BaseHTTPRequestHandler):
             if (result):
                 response = '''{ "%s": "%s" }''' % (commandName, result)
             else:
-                response = "Failed: Unknown command"
+                response = "Failed: Unknown command - %s" % commandName
 
         elif 'toggleStatus' in self.path:
             if paths[2] == 'toggleStatus':
@@ -196,7 +195,7 @@ class Handler(BaseHTTPRequestHandler):
             if (status):
                 response = '''{ "%s": "%s" }''' % (commandName, status)
             else:
-                response = "Failed: Unknown command"
+                response = "Failed: Unknown command - %s"% commandName
 
         elif 'getSensor' in self.path or 'a1' in self.path:
             if paths[2] == 'getSensor':
@@ -240,7 +239,7 @@ def sendCommand(commandName,params,deviceName):
     else:
         return "Failed: No such device, %s" % deviceName
 
-    # print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
+    print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
     origCommand = commandName
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params,deviceName)
@@ -330,6 +329,7 @@ def setStatus(commandName, status, params, deviceName=None):
     else:
         sectionName = deviceName + ' Status'
 
+    print "command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName)
     backupSettings()
     try:
         if not settingsFile.has_section(sectionName):
@@ -341,7 +341,7 @@ def setStatus(commandName, status, params, deviceName=None):
         if settingsFile.has_section("SET "+commandName):
             if settingsFile.has_option("SET "+commandName, "trigger"):
                 rawcommand = settingsFile.get("SET "+commandName, "trigger")
-                # print ("Trigger = %s" % rawcommand)
+                print ("Trigger = %s" % rawcommand)
                 return sendCommand(rawcommand,params,deviceName)
             else:
                 print("SET %s: A trigger is required" + commandName)
@@ -356,6 +356,7 @@ def getStatus(commandName, params, deviceName=None):
         sectionName = 'Status'
     else:
         sectionName = deviceName + ' Status'
+    print "devicename = %s section = %s" % (deviceName, sectionName)
 
     if settingsFile.has_option(sectionName,commandName):
         status = settingsFile.get(sectionName, commandName)

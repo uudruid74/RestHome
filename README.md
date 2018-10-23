@@ -35,13 +35,13 @@ it in /etc/hosts
 
 3) In your browser:
 ```
-http://localhost:8080/learnCommand/lampon   #learn command with name lampon
-http://localhost:8080/sendCommand/lampon    #send command with name lampon
+http://localhost:8080/learnCommand/lamp     #learn command with name lamp
+http://localhost:8080/sendCommand/lampon    #send command with name lamp, set lamp to 1
 ```
 If you have more than one device, use the alternate syntax
 ```
-http://localhost:8080/deviceName/learnCommand/lampon   #learn command with name lampon
-http://localhost:8080/deviceName/sendCommand/lampon    #send command with name lampon
+http://localhost:8080/deviceName/learnCommand/lamp   #learn command with name lamp
+http://localhost:8080/deviceName/sendCommand/lampon    #send command with name lamp, set lamp to 1
 ```
 
 4) Added get temperature from supported devices (like RM2/Pro):
@@ -105,4 +105,19 @@ on a device and automatically turn it back off after some delay.  It should
 compliment your cron or other scheduler nicely.  You can run TIMER commands
 from the StartUpCommand if StartUpCommand is a MACRO.
 
+TODO: Allow a CANCEL to cancel a previous timer.  Also, any new timer should
+cancel all previous timers of the same name!
 
+TODO: Automatically assign variables whenever an on or off is appended to a
+command.  If the value doesn't change, ignore the command.  Only use this
+behavior if a command with the "on" or "off" already appended does not exist
+
+TODO: A SET trigger should allow on/off rather than trigger.  These branches
+are taken only if the value changes while a trigger branch is always taken.
+
+FIXME: How can I change device domains?  Add the parenthesis params and then
+start passing the device name in the parameter dictionary rather than its own
+parameter.
+    ex: command = MACRO suba subb(devicename=LivingRoom-Heater) subc
+
+Parameters should be URL params, then POST values, then settings params

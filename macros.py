@@ -64,25 +64,25 @@ eventList = EventList()
 #- TODO - allow status vars as parameters
 #-
 def checkMacros(commandFromSettings,query,deviceName):
-    # print ("checkMacros %s %s" % (commandFromSettings,deviceName))
+    print ("checkMacros %s %s" % (commandFromSettings,deviceName))
     if commandFromSettings.startswith("PRINT "):
         return string.Template(commandFromSettings[6:]).substitute(query)
     elif commandFromSettings.startswith("SH "):
         return shellCommand(string.Template(commandFromSettings[3:]).substitute(query))
     elif commandFromSettings.startswith("SET "):
-        return setStatus(commandFromSettings[4:],"1",deviceName)
+        return setStatus(commandFromSettings[4:],"1",query,deviceName)
     elif commandFromSettings.startswith("INC "):
-        variable = int(getStatus(commandFromSettings[4:],deviceName))
+        variable = int(getStatus(commandFromSettings[4:],query,deviceName))
         variable += 1
         return setStatus(commandFromSettings[4:],variable,deviceName)
     elif commandFromSettings.startswith("DEC "):
-        variable = int(getStatus(commandFromSettings[4:],deviceName))
+        variable = int(getStatus(commandFromSettings[4:],query,deviceName))
         variable -= 1
         return setStatus(commandFromSettings[4:],variable,deviceName)
     elif commandFromSettings.startswith("CLEAR "):
-        return setStatus(commandFromSettings[6:],"0",deviceName)
+        return setStatus(commandFromSettings[6:],"0",query,deviceName)
     elif commandFromSettings.startswith("TOGGLE "):
-        return toggleStatus(commandFromSettings[7:],deviceName)
+        return toggleStatus(commandFromSettings[7:],query,deviceName)
     elif commandFromSettings.startswith("MACRO "):
         expandedCommand = string.Template(commandFromSettings[6:]).substitute(query)
         commandFromSettings = expandedCommand.strip()
@@ -142,8 +142,8 @@ def execute_test(command,query,deviceName):
     section = "TEST "+command
     try:
         valueToTest = settingsFile.get(section,"value")
-        value = getStatus(valueToTest,deviceName)
-        # print("TEST returned %s" % value)
+        value = getStatus(valueToTest,query,deviceName)
+        print("TEST returned %s" % value)
         if value == "1":
             rawcommand = settingsFile.get(section,"on")
         else:
@@ -202,7 +202,7 @@ def ping(host):
     return subprocess.call(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE) == 0
 
 def execute_check(command,query,deviceName):
-    # print ("Execute Check")
+    print ("Execute Check")
     section = "CHECK "+command
     try:
         host = settingsFile.get(section,"host")
@@ -219,7 +219,7 @@ def execute_check(command,query,deviceName):
 
 def execute_timer(command,query,deviceName):
     section = "TIMER "+command
-    # print ("Execute TIMER: " + command)
+    print ("Execute TIMER: " + command)
     try:
         command = settingsFile.get(section,"command");
         delay = 0
@@ -237,7 +237,7 @@ def execute_timer(command,query,deviceName):
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query,deviceName):
-    # print ("LOGIC %s %s" % (command,deviceName))
+    print ("LOGIC %s %s" % (command,deviceName))
     section = "LOGIC "+command
     newcommand = None
     try:
