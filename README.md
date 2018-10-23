@@ -105,8 +105,11 @@ on a device and automatically turn it back off after some delay.  It should
 compliment your cron or other scheduler nicely.  You can run TIMER commands
 from the StartUpCommand if StartUpCommand is a MACRO.
 
-TODO: Allow a CANCEL to cancel a previous timer.  Also, any new timer should
-cancel all previous timers of the same name!
+Each TIMER has a name and there can only be one TIMER of any given name active
+at any given time.  New timers with the same name will replace the command
+of the previous timer.
+
+TODO: Allow a CANCEL to cancel a previous timer.
 
 TODO: Automatically assign variables whenever an on or off is appended to a
 command.  If the value doesn't change, ignore the command.  Only use this
@@ -114,6 +117,8 @@ behavior if a command with the "on" or "off" already appended does not exist
 
 TODO: A SET trigger should allow on/off rather than trigger.  These branches
 are taken only if the value changes while a trigger branch is always taken.
+There should also be a "nop" or someway to trigger an action when a SET 
+(or CLEAR) happens and the value doesn't change.
 
 FIXME: How can I change device domains?  Add the parenthesis params and then
 start passing the device name in the parameter dictionary rather than its own

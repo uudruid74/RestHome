@@ -123,7 +123,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
-            result = learnCommand(commandName,self.Parameters,deviceName)
+            self.Parameters["device"] = deviceName
+            result = learnCommand(commandName,self.Parameters)
             if result == False:
                 response = "Failed: No command learned"
             else:
@@ -136,20 +137,21 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
+            self.Parameters["device"] = deviceName
             if 'on' in commandName or 'off' in commandName:
                 status = commandName.rsplit('o', 1)[1]
                 realcommandName = commandName.rsplit('o', 1)[0]
                 print(status, realcommandName)
                 if 'n' in status:
-                    result = setStatus(realcommandName, '1',self.Parameters,deviceName)
+                    result = setStatus(realcommandName, '1',self.Parameters)
                 elif 'ff' in status:
-                    result = setStatus(realcommandName, '0',self.Parameters,deviceName)
+                    result = setStatus(realcommandName, '0',self.Parameters)
                 if result:
                     result = '''{ "%s": "%s" }''' % (realcommandName,result)
                 # print ("SendCommand result: %s" % result)
-                result = sendCommand(realcommandName, self.Parameters, deviceName)
+                result = sendCommand(realcommandName, self.Parameters)
             else:
-                result = sendCommand(commandName, self.Parameters, deviceName)
+                result = sendCommand(commandName, self.Parameters)
             if result == False:
                 response = "Failed: Unknown command - %s" % commandName
             else:
@@ -162,8 +164,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
-
-            status = getStatus(commandName,self.Parameters,deviceName)
+            self.Parameters["device"] = deviceName
+            status = getStatus(commandName,self.Parameters)
             if (status):
                 response = '''{ "%s": "%s" }''' % (commandName,status)
             else:
@@ -178,7 +180,8 @@ class Handler(BaseHTTPRequestHandler):
                 commandName = paths[2]
                 deviceName = None
                 status = paths[3]
-            result = setStatus(commandName, status, self.Parameters, deviceName)
+            self.Parameters["device"] = deviceName
+            result = setStatus(commandName, status, self.Parameters)
             if (result):
                 response = '''{ "%s": "%s" }''' % (commandName, result)
             else:
@@ -191,7 +194,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
-            status = toggleStatus(commandName, self.Parameters, deviceName)
+            self.Parameters["device"] = deviceName
+            status = toggleStatus(commandName, self.Parameters)
             if (status):
                 response = '''{ "%s": "%s" }''' % (commandName, status)
             else:
@@ -210,7 +214,8 @@ class Handler(BaseHTTPRequestHandler):
                         if "A1" == dev.type.upper():
                             deviceName = dev.hostname
                             break
-            result = getSensor(sensor, self.Parameters, deviceName)
+            self.Parameters["device"] = deviceName
+            result = getSensor(sensor, self.Parameters)
             if result == False:
                 reponse = "Failed to get data"
             else:
@@ -229,7 +234,8 @@ class Handler(BaseHTTPRequestHandler):
         print ("\t"+response)
         print ""
 
-def sendCommand(commandName,params,deviceName):
+def sendCommand(commandName,params):
+    deviceName = params["device"]
     if deviceName == None:
         device = devices[0]
         serviceName = 'Commands'
@@ -239,10 +245,10 @@ def sendCommand(commandName,params,deviceName):
     else:
         return "Failed: No such device, %s" % deviceName
 
-    print ("sendCommand: %s Orig: %s" % (commandName,deviceName))
+    print ("sendCommand: %s Device: %s" % (commandName,deviceName))
     origCommand = commandName
     if commandName.strip() != '':
-        result = macros.checkConditionals(commandName,params,deviceName)
+        result = macros.checkConditionals(commandName,params)
         # print ("checkCond result: %s = %s" % (commandName,result))
         if result:
             return result
@@ -251,7 +257,7 @@ def sendCommand(commandName,params,deviceName):
         elif settingsFile.has_option('Commands', commandName):
             commandName = settingsFile.get('Commands', commandName)
 
-        result = macros.checkMacros(commandName,params,deviceName)
+        result = macros.checkMacros(commandName,params)
         # print ("Macro Result: %s = %s" % (commandName,result))
         if result:
             return result
@@ -276,7 +282,8 @@ def sendCommand(commandName,params,deviceName):
     else:
         return False
 
-def learnCommand(commandName, params, deviceName=None):
+def learnCommand(commandName, params):
+    deviceName = params["device"]
     if deviceName == None:
         device = devices[0]
         sectionName = 'Commands'
@@ -323,7 +330,8 @@ def learnCommand(commandName, params, deviceName=None):
         restoreSettings()
         return False
 
-def setStatus(commandName, status, params, deviceName=None):
+def setStatus(commandName, status, params):
+    deviceName = params["device"]
     if deviceName == None:
         sectionName = 'Status'
     else:
@@ -342,16 +350,17 @@ def setStatus(commandName, status, params, deviceName=None):
             if settingsFile.has_option("SET "+commandName, "trigger"):
                 rawcommand = settingsFile.get("SET "+commandName, "trigger")
                 print ("Trigger = %s" % rawcommand)
-                return sendCommand(rawcommand,params,deviceName)
+                return sendCommand(rawcommand,params)
             else:
                 print("SET %s: A trigger is required" + commandName)
-        return getStatus(commandName,params,deviceName)
+        return getStatus(commandName,params)
     except StandardError as e:
         print ("Error writing settings file: %s" % e)
         restoreSettings()
         return False
 
-def getStatus(commandName, params, deviceName=None):
+def getStatus(commandName, params):
+    deviceName = params["device"]
     if deviceName == None:
         sectionName = 'Status'
     else:
@@ -361,25 +370,25 @@ def getStatus(commandName, params, deviceName=None):
     if settingsFile.has_option(sectionName,commandName):
         status = settingsFile.get(sectionName, commandName)
         return status
-    status = getSensor(commandName,params,deviceName)
+    status = getSensor(commandName,params)
     if status:
         return status
     else:
         print ("Can't find %s %s" % (sectionName, commandName))
         return False
 
-def toggleStatus(commandName, params, deviceName=None):
-    print (deviceName)
-    status = getStatus(commandName,params,deviceName)
+def toggleStatus(commandName, params):
+    status = getStatus(commandName,params)
     # print ("Status = %s" % status)
     try:
         if status == "0":
-            return setStatus(commandName,"1",params,deviceName)
+            return setStatus(commandName,"1",params)
     except:
         pass
-    return setStatus(commandName,"0",params,deviceName)
+    return setStatus(commandName,"0",params)
 
-def getSensor(sensorName,params,deviceName=None):
+def getSensor(sensorName,params):
+    deviceName = params["device"]
     if deviceName == None:
         device = devices[0]
     elif deviceName in DeviceByName:
@@ -410,7 +419,7 @@ def start(server_class=Server, handler_class=Handler, port=8080, listen='0.0.0.0
         timer = min(timeout,macros.eventList.nextEvent())
         while timer < 1:
             event = macros.eventList.pop()
-            result = sendCommand(event.command,event.params,event.deviceName)
+            result = sendCommand(event.command,event.params)
             print "TIMER EXPIRED - %s\n\tresult: %s" % (event.command, result)
             timer = min(timeout,macros.eventList.nextEvent())
         httpd.timeout = timer
@@ -554,7 +563,7 @@ def readSettingsFile():
                 print ("%s: Read %s on %s (%s)" % (devname, device.type, str(device.host[0]), device.mac))
             DeviceByName[devname] = device
             if Dev[devname,'StartUpCommand'] != None:
-                sendCommand(Dev[devname,'StartUpCommand'],None,devname)
+                sendCommand(Dev[devname,'StartUpCommand'],None)
     return { "port": serverPort, "listen": listen_address, "timeout": GlobalTimeout }
 
 def SigUsr1(signum, frame):
