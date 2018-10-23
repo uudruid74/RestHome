@@ -350,7 +350,7 @@ def setStatus(commandName, status, params):
             if settingsFile.has_option("SET "+commandName, "trigger"):
                 rawcommand = settingsFile.get("SET "+commandName, "trigger")
                 print ("Trigger = %s" % rawcommand)
-                return sendCommand(rawcommand,params)
+                macros.eventList.add(commandName,1,rawcommand,params)
             else:
                 print("SET %s: A trigger is required" + commandName)
         return getStatus(commandName,params)
