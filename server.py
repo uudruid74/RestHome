@@ -136,7 +136,6 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 commandName = paths[2]
                 deviceName = None
-            result = sendCommand(commandName, self.Parameters, deviceName)
             if 'on' in commandName or 'off' in commandName:
                 status = commandName.rsplit('o', 1)[1]
                 realcommandName = commandName.rsplit('o', 1)[0]
@@ -148,6 +147,10 @@ class Handler(BaseHTTPRequestHandler):
                 if result:
                     result = '''{ "%s": "%s" }''' % (realcommandName,result)
                 # print ("SendCommand result: %s" % result)
+                result = sendCommand(realcommandName, self.Parameters, deviceName)
+                
+            else:
+                result = sendCommand(commandName, self.Parameters, deviceName)
             if result == False:
                 response = "Failed: Unknown command"
             else:
