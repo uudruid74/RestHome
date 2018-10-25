@@ -138,20 +138,7 @@ class Handler(BaseHTTPRequestHandler):
                 commandName = paths[2]
                 deviceName = None
             self.Parameters["device"] = deviceName
-            if 'on' in commandName or 'off' in commandName:
-                status = commandName.rsplit('o', 1)[1]
-                realcommandName = commandName.rsplit('o', 1)[0]
-                print(status, realcommandName)
-                if 'n' in status:
-                    result = setStatus(realcommandName, '1',self.Parameters)
-                elif 'ff' in status:
-                    result = setStatus(realcommandName, '0',self.Parameters)
-                if result:
-                    result = '''{ "%s": "%s" }''' % (realcommandName,result)
-                # print ("SendCommand result: %s" % result)
-                result = sendCommand(realcommandName, self.Parameters)
-            else:
-                result = sendCommand(commandName, self.Parameters)
+            result = sendCommand(commandName, self.Parameters)
             if result == False:
                 response = "Failed: Unknown command - %s" % commandName
             else:
@@ -245,8 +232,17 @@ def sendCommand(commandName,params):
     else:
         return "Failed: No such device, %s" % deviceName
 
-    print ("sendCommand: %s Device: %s" % (commandName,deviceName))
+    #print ("sendCommand: %s Device: %s" % (commandName,deviceName))
     origCommand = commandName
+    if 'PRINT' not in commandName:
+        if 'on' in commandName or 'off' in commandName:
+            status = commandName.rsplit('o', 1)[1]
+            commandName = commandName.rsplit('o', 1)[0]
+            if 'n' in status:
+                setStatus(commandName, '1', params)
+            elif 'ff' in status:
+                setStatus(commandName, '0', params)
+
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
         # print ("checkCond result: %s = %s" % (commandName,result))
@@ -337,8 +333,12 @@ def setStatus(commandName, status, params):
     else:
         sectionName = deviceName + ' Status'
 
-    print "command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName)
+    #print "command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName)
     backupSettings()
+    oldvalue = getStatus(commandName,params)
+    if oldvalue == status:
+        print "Value of %s not changed: %s" % (commandName, status)
+        return oldvalue
     try:
         if not settingsFile.has_section(sectionName):
             settingsFile.add_section(sectionName)
@@ -347,13 +347,25 @@ def setStatus(commandName, status, params):
         settingsFile.write(broadlinkControlIniFile)
         broadlinkControlIniFile.close()
         if settingsFile.has_section("SET "+commandName):
-            if settingsFile.has_option("SET "+commandName, "trigger"):
-                rawcommand = settingsFile.get("SET "+commandName, "trigger")
-                print ("Trigger = %s" % rawcommand)
+            section = "SET " + commandName
+            if settingsFile.has_option(section, "trigger"):
+                rawcommand = settingsFile.get(section, "trigger")
+                #print ("Triger = %s" % rawcommand)
                 macros.eventList.add(commandName,1,rawcommand,params)
             else:
-                print("SET %s: A trigger is required" + commandName)
-        return getStatus(commandName,params)
+                try:
+                    value = getStatus(commandName,params)
+#                   print("TEST returned %s" % value)
+                    if value == "1":
+                        rawcommand = settingsFile.get(section,"on")
+                    else:
+                        rawcommand = settingsFile.get(section,"off")
+                    # print ("Raw: %s" % rawcommand)
+                    macros.eventList.add(commandName,1,rawcommand,params)
+                except StandardError as e:
+                    print("SET %s: A trigger or on/off pair is required" % commandName)
+                    # print ("ERROR was %s" % e)
+        return oldvalue
     except StandardError as e:
         print ("Error writing settings file: %s" % e)
         restoreSettings()
@@ -365,7 +377,7 @@ def getStatus(commandName, params):
         sectionName = 'Status'
     else:
         sectionName = deviceName + ' Status'
-    print "devicename = %s section = %s" % (deviceName, sectionName)
+    #print "devicename = %s section = %s" % (deviceName, sectionName)
 
     if settingsFile.has_option(sectionName,commandName):
         status = settingsFile.get(sectionName, commandName)

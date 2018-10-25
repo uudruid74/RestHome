@@ -27,7 +27,7 @@ right value you may use an instruction such as:
     SH      Short shell command to run, $param substitution is done
             WARNING!  $parameters are passed directly to the OS!  However,
             shell expansions and such are NOT done.  There is no shell!
-    CANCEL  <unimplemented> TODO: Cancel a timer
+    CANCEL  And a single variable, the timer to cancel
 
 Any other "rvalue" should be either a real IR code or a command defined
 elsewhere.  You may define commands in either the command section, or using
@@ -64,8 +64,14 @@ The following keywords are defined
         off     command if the variable is off
 
     SET     Defines a trigger to run when a variable changes.  This should be
-            a TEST or LOGIC section normally
-        trigger Name of the section to run when variable is set
+            a TEST or LOGIC section normally.  The command will be run async
+            so that if a value is set multiple times, it will only be run once.
+            NEW: You can now perform the test as part of the trigger.  Commands
+            run from a MACRO that end in on/off will now perform variable sets
+            and triggers like the URL.
+        trigger Name of the section to run when variable is changed
+        on      if trigger is not set, and variable is now '1', do this
+        off     if trigger is not set, and variable is now '0', do this
 
     CHECK   Sends a PING to a host to see if it's up.  If the host is up, the
             host is considered to be "on", else it's "off".  You could use a

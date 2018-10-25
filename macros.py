@@ -71,6 +71,18 @@ class EventList(object):
             else:
                 node = node.nextNode
         return None
+    def delete(self,name):
+        node = self.begin
+        if node.name == name:
+            self.begin = self.begin.nextNode
+        while node.nextNode != None:
+            if node.nextNode.name == name:
+                found = node.nextNode
+                node.nextNode = node.nextNode.nextNode
+                return found
+            else:
+                node = node.nextNode
+        return None
 
 eventList = EventList()
 
@@ -78,7 +90,7 @@ eventList = EventList()
 #- TODO - allow status vars as parameters
 #-
 def checkMacros(commandFromSettings,query):
-    print ("checkMacros %s" % commandFromSettings)
+#    print ("checkMacros %s" % commandFromSettings)
     if commandFromSettings.startswith("PRINT "):
         return string.Template(commandFromSettings[6:]).substitute(query)
     elif commandFromSettings.startswith("SH "):
@@ -89,6 +101,10 @@ def checkMacros(commandFromSettings,query):
         variable = int(getStatus(commandFromSettings[4:],query))
         variable += 1
         return setStatus(commandFromSettings[4:],variable)
+    elif commandFromSettings.startswith("CANCEL "):
+        variable = int(getStatus(commandFromSettings[7:],query))
+        eventList.delete(variable)
+        return "{ '''cancelled''': '''%s''' }" % variable
     elif commandFromSettings.startswith("DEC "):
         variable = int(getStatus(commandFromSettings[4:],query))
         variable -= 1
@@ -157,7 +173,7 @@ def execute_test(command,query):
     try:
         valueToTest = settingsFile.get(section,"value")
         value = getStatus(valueToTest,query)
-        print("TEST returned %s" % value)
+ #       print("TEST returned %s" % value)
         if value == "1":
             rawcommand = settingsFile.get(section,"on")
         else:
@@ -216,7 +232,7 @@ def ping(host):
     return subprocess.call(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE) == 0
 
 def execute_check(command,query):
-    print ("Execute Check")
+#    print ("Execute Check")
     section = "CHECK "+command
     try:
         host = settingsFile.get(section,"host")
@@ -233,7 +249,7 @@ def execute_check(command,query):
 
 def execute_timer(command,query):
     section = "TIMER "+command
-    print ("Execute TIMER: " + command)
+#    print ("Execute TIMER: " + command)
     try:
         command = settingsFile.get(section,"command");
         delay = 0
@@ -251,7 +267,7 @@ def execute_timer(command,query):
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query):
-    print ("LOGIC %s" % command)
+#    print ("LOGIC %s" % command)
     section = "LOGIC "+command
     newcommand = None
     try:
