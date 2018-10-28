@@ -33,6 +33,11 @@ for section in settings.sections():
         Dev[section,'Timeout'] = int(settings.get(section, 'Timeout').strip())
     else:
         Dev[section,'Timeout'] = 8
+    if settings.has_option(section,'Delay'):
+        Dev[section,'Delay'] = float(settings.get(section, 'Delay').strip())
+    else:
+        Dev[section,'Delay'] = 0.0
+    print '''Setting "%s" delay to "%s"''' % (section,Dev[section,'Delay'])
     if settings.has_option(section,'Device'):
         Dev[section,'Device'] = int(settings.get(section, 'Device').strip(),16)
     else:

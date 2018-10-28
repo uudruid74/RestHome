@@ -147,10 +147,11 @@ def checkMacros(commandFromSettings,query):
                 if newresult:
                     # print ("Result: %s" % newresult)
                     result = append(result,newresult)
-        time.sleep(0.2)
+            time.sleep(query["deviceDelay"])
         if result:
             return result
     else:
+        time.sleep(query["deviceDelay"])
         return False #- not a macro
 
 #- Wake On Lan

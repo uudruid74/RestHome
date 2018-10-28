@@ -13,6 +13,7 @@ import macros
 import re
 import collections
 import platform
+import pdb
 from os import path
 from Crypto.Cipher import AES
 
@@ -223,16 +224,19 @@ class Handler(BaseHTTPRequestHandler):
 
 def sendCommand(commandName,params):
     deviceName = params["device"]
+#    print '''SendCommand: %s to "%s"''' % (commandName,deviceName)
     if deviceName == None:
         device = devices[0]
         serviceName = 'Commands'
     elif deviceName in DeviceByName:
         device = DeviceByName[deviceName];
+        params["deviceDelay"] = settings.Dev[deviceName,"Delay"]
         serviceName = deviceName + ' Commands'
     else:
         return "Failed: No such device, %s" % deviceName
+    if params["deviceDelay"] == None:
+        params["deviceDelay"] = 0.2
 
-    #print ("sendCommand: %s Device: %s" % (commandName,deviceName))
     origCommand = commandName
     if 'PRINT' not in commandName:
         if 'on' in commandName or 'off' in commandName:

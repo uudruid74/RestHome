@@ -109,9 +109,15 @@ Each TIMER has a name and there can only be one TIMER of any given name active
 at any given time.  New timers with the same name will replace the command
 of the previous timer.
 
-FIXME: How can I change device domains?  Add the parenthesis params and then
+9) Added Delay to device section such that this delay (in seconds, floats
+allowed) is inserted after every command is sent.  Default is 0
+
+**TODO: REWRITE ALL DOCUMENTATION**
+
+**FIXME:** How can I change device domains?  Add the parenthesis params and then
 start passing the device name in the parameter dictionary rather than its own
 parameter.
     Ex: command = MACRO suba subb(devicename=LivingRoom-Heater) subc
 
 Parameters should be URL params, then POST values, then settings params
+
