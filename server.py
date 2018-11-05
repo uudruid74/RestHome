@@ -397,7 +397,7 @@ def getStatus(commandName, params):
         return status
     else:
         # print ("Can't find %s %s" % (sectionName, commandName))
-        return False
+        return '0'
 
 def toggleStatus(commandName, params):
     status = getStatus(commandName,params)
@@ -442,7 +442,7 @@ def start(server_class=Server, handler_class=Handler, port=8080, listen='0.0.0.0
         while timer < 1:
             event = macros.eventList.pop()
             result = sendCommand(event.command,event.params)
-            print "TIMER EXPIRED - %s\n\tresult: %s" % (event.command, result)
+            print "TIMER EXPIRED - %s (%s)\n\tresult: %s" % (event.name, event.command, result)
             timer = min(timeout,macros.eventList.nextEvent())
         httpd.timeout = timer
         httpd.handle_request()

@@ -1,3 +1,4 @@
+m
 Broadlink HTTP server/proxy with REST API
 ==================================
 Supported devices: RM/RM2/RM Pro/RM3/BlackBean/A1
@@ -123,6 +124,8 @@ below:
     Ex2:    command = MACRO suba subb(device=LivingRoom-Heater) subc
 
 Parameters are parsed as URL params, then POST values, then settings params
+
+11) New RADIO button support.  See docs in macros.txt
 
 **TODO: REWRITE ALL DOCUMENTATION**
 

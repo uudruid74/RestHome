@@ -111,11 +111,25 @@ The following keywords are defined
         command     The command string to run.  Can be real or virtual.  The
                     parameters of the command that triggered the timer are
                     saved and used run the command
+    RADIO   Used to set modes that are mutually exclusive.  The state of which
+            mode is currently active is saved.  When you execite this command
+            you pass in the variable "button" (in parenthesis if a MACRO, or
+            in the URL as a parameter) set to the new button you are "pushing"
+            The parameters are:
+        button0off  Button 0 is the first/default button.  The off command for
+                    the old button state is sent before the new button is
+                    turned on (break before make).  The off command is optional
+        button0on   All buttons have a number and an "on" command.
+        button1on   Each button is just the command to execute when the button
+                    is pushed.  It will not be sent twice if the same button
+                    is pushed twice.
+        button1off  Off command are optional.
 
 The LOGIC Section is the ultimate / universal conditional.  It can take many
 forms, so we'll devote a bit more area to this one:
-        test    The variable name to test is not optional
-        compare If a compare variable is listed, it's compared with the test.
+        test        The variable name to test is not optional
+        compare     If a compare variable is listed, it's compared with the 
+                    test.
 
 If there is no compare, the value of "test" can be 0 or 1, which will trigger
         on      This is executed if the variable is a 1 or "on"

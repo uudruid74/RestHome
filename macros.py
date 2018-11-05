@@ -2,6 +2,7 @@ import wol
 import string
 import time
 from platform import system as system_name
+from math import ceil as ceiling
 import subprocess
 
 def append(a,b):
@@ -28,16 +29,14 @@ class EventList(object):
         else:
             return 86400 #- 1 day
     def insert(self,node):
-        #- insert into empty list
-        if self.begin == None:
-            self.begin = node
-            return
         node.nextNode = self.begin
         #- insert into beginning
-        if self.begin == None or node.timestamp < node.nextEvent:
+        if self.begin == None or node.timestamp < node.nextNode:
+            #print "Insert at beginning"
             self.begin = node
         else:
         #- insert into middle
+            #print "Insert in middle"
             while node.nextNode.nextNode != None:
                 if node.timeStamp >= node.nextNode.timestamp:
                     node.nextNode = node.nextNode.nextNode
@@ -46,12 +45,15 @@ class EventList(object):
                     node.nextNode = node.nextNode.nextNode
                     return
         #- insert at end
+            #print "Insert at end"
             node.nextNode = node
             node.nextNode = None
     def pop(self):
         retvalue = self.begin
-        if retvalue != None:
+        if retvalue is not None and retvalue.nextNode is not None:
             self.begin = retvalue.nextNode
+        else:
+            self.begin = None
         return retvalue
     def add(self,name,fire,command,params):
         found = self.find(name)
@@ -256,6 +258,30 @@ def execute_check(command,query):
         print ("Failed: %s" % e)
     return False
 
+def execute_radio(command,query):
+    section = "RADIO " + command
+    try:
+        status = getStatus(command,query)
+        newstatus = query["button"]
+        mult = 1.0
+        if (status == newstatus):
+            print "RADIO button already at state = %s" % status
+            return status
+        else:
+            off = "button" + status + "off"
+            if settingsFile.has_option(section,off):
+                offCommand = settingsFile.get(section,off)
+                eventList.add(command+"off",ceiling(query['deviceDelay']),query)
+                mult = 2.0
+            on = "button" + newstatus + "on"
+            if settingsFile.has_option(section,on):
+                onCommand = settingsFile.get(section,on)
+                eventList.add(command+"on",ceiling(query['deviceDelay']*mult),onCommand,query)
+            return setStatus(command,newstatus,query)
+    except StandardError as e:
+        print ("Failed: %s" % e)
+    return False
+
 def execute_timer(command,query):
     section = "TIMER "+command
 #    print ("Execute TIMER: " + command)
@@ -353,6 +379,8 @@ def checkConditionals(command,query):
         return execute_shell(command,query)
     elif settingsFile.has_section("TIMER "+command):
         return execute_timer(command,query)
+    elif settingsFile.has_section("RADIO "+command):
+        return execute_radio(command,query)
     else:
         return False
 
