@@ -22,7 +22,7 @@ for section in settings.sections():
     #- Special sections, control nodes
     if section.startswith("LOGIC ") or section.startswith("SET ") or \
             section.startswith("TEST ") or section.startswith("CHECK ") or \
-            section.startswith("TIMER ") or \
+            section.startswith("TIMER ") or section.startswith("RADIO") or \
             section.startswith("WOL ") or section.startswith("SHELL "):
         continue
     #- These are devices

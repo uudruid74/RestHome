@@ -80,20 +80,20 @@ class Handler(BaseHTTPRequestHandler):
             if GlobalPassword and GlobalPassword == password:
                 return self.messageHandler()
             else:
-                print ("Password Failure: %s" % password)
+                print ('''POST Password Wrong: "%s"''' % password)
         except NameError:
                 return self.password_required()
         self.password_required()
 
     def password_required(self):
-        response = "Password required from %s" % self.client_address[0]
+        response = "POST Password required from %s" % self.client_address[0]
         self.wfile.write('''{ "error": "%s" }''' % response)
         print (response)
         self.close_connection = 1
         return False
 
     def access_denied(self):
-        response = "Client %s is not allowed!" % self.client_address[0]
+        response = "Client %s is not allowed to use GET!" % self.client_address[0]
         self.wfile.write('''{ "error": "%s" }''' % response)
         print (response)
         self.close_connection = 1
@@ -238,14 +238,14 @@ def sendCommand(commandName,params):
         params["deviceDelay"] = 0.2
 
     origCommand = commandName
-    if 'PRINT' not in commandName:
+    if 'PRINT' not in commandName and 'MACRO' not in commandName:
         if 'on' in commandName or 'off' in commandName:
             status = commandName.rsplit('o', 1)[1]
-            commandName = commandName.rsplit('o', 1)[0]
+            newCommandName = commandName.rsplit('o', 1)[0]
             if 'n' in status:
-                setStatus(commandName, '1', params)
+                result = setStatus(newCommandName, '1', params)
             elif 'ff' in status:
-                setStatus(commandName, '0', params)
+                result = setStatus(newCommandName, '0', params)
 
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
@@ -332,10 +332,9 @@ def learnCommand(commandName, params):
 
 def setStatus(commandName, status, params):
     deviceName = params["device"]
-    if deviceName == None:
-        sectionName = 'Status'
-    else:
-        sectionName = deviceName + ' Status'
+    sectionName = 'Status'
+    if deviceName is not None and ('globalVariable' not in params or params['globalVariable'] is not commandName):
+        sectionName = deviceName + " Status"
 
     #print "command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName)
     backupSettings()
@@ -369,6 +368,9 @@ def setStatus(commandName, status, params):
                 except StandardError as e:
                     print("SET %s: A trigger or on/off pair is required" % commandName)
                     # print ("ERROR was %s" % e)
+        elif settingsFile.has_section("LOGIC "+commandName):
+            macros.eventList.add(commandName,1,commandName,params)
+            print ("Queued LOGIC branch: %s" % commandName)
         return oldvalue
     except StandardError as e:
         print ("Error writing settings file: %s" % e)
@@ -377,20 +379,24 @@ def setStatus(commandName, status, params):
 
 def getStatus(commandName, params):
     deviceName = params["device"]
-    if deviceName == None:
-        sectionName = 'Status'
-    else:
-        sectionName = deviceName + ' Status'
+    sectionName = 'Status'
+    if deviceName is not None:
+        sectionName = deviceName + " Status"
+
     #print "devicename = %s section = %s" % (deviceName, sectionName)
 
     if settingsFile.has_option(sectionName,commandName):
         status = settingsFile.get(sectionName, commandName)
         return status
+    if settingsFile.has_option('Status',commandName):
+        status = settingsFile.get(sectionName, commandName)
+        params["globalVariable"] = commandName
+        return status
     status = getSensor(commandName,params)
     if status:
         return status
     else:
-        print ("Can't find %s %s" % (sectionName, commandName))
+        # print ("Can't find %s %s" % (sectionName, commandName))
         return False
 
 def toggleStatus(commandName, params):
@@ -579,7 +585,11 @@ def readSettingsFile():
                 print ("%s: Read %s on %s (%s)" % (devname, device.type, str(device.host[0]), device.mac))
             DeviceByName[devname] = device
             if Dev[devname,'StartUpCommand'] != None:
-                sendCommand(Dev[devname,'StartUpCommand'],None)
+                commandName = Dev[devname,'StartUpCommand']
+                query = {}
+                query["device"] = devname
+                macros.eventList.add("StartUp"+commandName,1,commandName,query)
+
     return { "port": serverPort, "listen": listen_address, "timeout": GlobalTimeout }
 
 def SigUsr1(signum, frame):
@@ -604,7 +614,7 @@ if __name__ == "__main__":
     while not ShutdownRequested:
         serverParams = readSettingsFile()
         InterruptRequested = False
-        macros.init_callbacks(settingsFile,sendCommand,getStatus,setStatus)
+        macros.init_callbacks(settingsFile,sendCommand,getStatus,setStatus,toggleStatus)
         start(**serverParams)
         if not ShutdownRequested:
             reload(settings)

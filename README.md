@@ -112,12 +112,17 @@ of the previous timer.
 9) Added Delay to device section such that this delay (in seconds, floats
 allowed) is inserted after every command is sent.  Default is 0
 
+10) In addition to setting parameters in an URL line, you can now do this in
+a MACRO line by placing the parameters to set in parenthesis after the command
+you wish to pass them to.  These variables are then expanded as if they were
+passed in an URL.   You can even change devices, like the second example
+below:
+    Ex1:    testPrint = MACRO printThis(output=Hello From testPrint)
+            printThis = PRINT Hey, someone said to tell you $output
+
+    Ex2:    command = MACRO suba subb(device=LivingRoom-Heater) subc
+
+Parameters are parsed as URL params, then POST values, then settings params
+
 **TODO: REWRITE ALL DOCUMENTATION**
-
-**FIXME:** How can I change device domains?  Add the parenthesis params and then
-start passing the device name in the parameter dictionary rather than its own
-parameter.
-    Ex: command = MACRO suba subb(devicename=LivingRoom-Heater) subc
-
-Parameters should be URL params, then POST values, then settings params
 

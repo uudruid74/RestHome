@@ -123,7 +123,14 @@ def checkMacros(commandFromSettings,query):
                 time.sleep(1)
                 result = append(result,command)
                 continue
-            if "," in command:
+            if "(" in command:
+                paramstring= command[command.find("(")+1:command.find(")")]
+                command = command[:command.find("(")]
+                for param in paramstring.split(','):
+                    pair = param.split('=')
+                    query[pair[0]] = pair[1]
+                    # print ("Setting %s to %s" % (pair[0], pair[1]))
+            elif "," in command:
                 result = append(result,command)
                 try:
                     (actualCommand, repeatAmount) = command.split(',')
@@ -143,6 +150,7 @@ def checkMacros(commandFromSettings,query):
                     print ("Invalid sleep time: %s; sleeping 2s" % command[5:])
                     time.sleep(2)
             else:
+                # print ("Executing %s" % command)
                 newresult = sendCommand(command,query)
                 if newresult:
                     # print ("Result: %s" % newresult)
@@ -191,7 +199,7 @@ def shellCommand(commandString):
     execCommand = [command,parameters]
     try:
         retval = subprocess.check_output(execCommand,shell=False).strip()
-    except CalledProcessError as e:
+    except subprocess.CalledProcessError as e:
         retval = "Fail: %d; %s" % (e.returncode,e.output)
     if len(retval) < 1:
         retval = 'done'
@@ -219,8 +227,8 @@ def execute_shell(command,query):
         else:
             retval = subprocess.check_output(execCommand,shell=shell).strip()
         if settingsFile.has_option(section,"store"):
-            setStatus(settingsFile.get(section,"store"),retval)
-    except CalledProcessError as e:
+            setStatus(settingsFile.get(section,"store"),retval,query)
+    except subprocess.CalledProcessError as e:
         retval = "Fail: %d; %s" % (e.returncode,e.output)
     if len(retval) < 1:
         retval = command
@@ -291,12 +299,13 @@ def execute_logicnode(command,query):
             value = float(value)
             if settingsFile.has_option(section,"compare"):
                 compareVar = settingsFile.get(section,"compare")
+                print ("%s = %s" % (compareVar,getStatus(compareVar,query)))
                 compare = float(getStatus(compareVar,query))
-                # print ("compare = %s = %s" % (compareVar,compare))
+                print ("compare = %s = %s" % (compareVar,compare))
             else:
                 compare = 0
             newvalue = value - compare
-            # print ("newvalue = %s" % newvalue)
+            print ("newvalue = %s" % newvalue)
             if newvalue < 0:
                 if settingsFile.has_option(section,"less"):
                     newcommand = settingsFile.get(section,"less")
@@ -347,10 +356,11 @@ def checkConditionals(command,query):
     else:
         return False
 
-def init_callbacks(settings,sendRef,getStatRef,setStatusRef):
-    global settingsFile,sendCommand,getStatus,setStatus
+def init_callbacks(settings,sendRef,getStatRef,setStatusRef,toggleStatusRef):
+    global settingsFile,sendCommand,getStatus,setStatus,toggleStatus
     settingsFile = settings
     sendCommand = sendRef
     getStatus = getStatRef
     setStatus = setStatusRef
+    toggleStatus = toggleStatusRef
 

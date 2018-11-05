@@ -33,8 +33,18 @@ Any other "rvalue" should be either a real IR code or a command defined
 elsewhere.  You may define commands in either the command section, or using
 a special section.
 
-SPECIAL NOTE: The MACRO lines can contain variable expansions as well, so
-you can determine what code is excuted via URL query parameters
+PARAMETERS: The MACRO lines can contain parameter expansions as well, so
+you can determine what code is excuted via URL query parameters.  You can
+also set these parameters in MACRO lines by placing them in parenthesis
+right after the command, Ex: printIt = MACRO printLine(line=Hello Now)
+Multiple parameters can be set by command separating them.  You can
+even set the device used (to make a command on one device trigger another)
+by setting the "device" parameter to the named device section.  The variables
+in Status sections are unrelated.  If you wish to test a passed parameter,
+such as in a LOGIC section, you will currently need to use a SET command to
+set the Status variable from the passed parameter.  This may be changed to
+allow Status variables to be defaults for parameters in the future.
+
 
 
 VARIABLES
