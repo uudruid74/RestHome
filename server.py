@@ -1,3 +1,4 @@
+#!/usr/bin/python
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 import broadlink, configparser
 import sys, getopt

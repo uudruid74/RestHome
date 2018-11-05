@@ -86,7 +86,11 @@ use "sleep1", "sleep2", "sleep3", etc. to insert a pause.  In this case,
 a comma is optional.
 
 Note: It may be helpful to reload your changes with SIGUSR1 when developing
-macros.
+macros.  The proper to do this is:
+```
+kill -SIGUSR1 `pidof -x server.py`
+```
+Actually, use the full path to server.py if you can.  It's safer
 
 8) Events and Timers
 Rather than a complicated amount of code to include a full scheduler into the
