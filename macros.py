@@ -3,7 +3,10 @@ import string
 import time
 from platform import system as system_name
 from math import ceil as ceiling
+from devices import devices, DeviceByName
 import subprocess
+import json
+import requests
 
 def append(a,b):
     if a.strip() == '':
@@ -92,7 +95,20 @@ eventList = EventList()
 #- TODO - allow status vars as parameters
 #-
 def checkMacros(commandFromSettings,query):
-#    print ("checkMacros %s" % commandFromSettings)
+    #print ("checkMacros %s" % commandFromSettings)
+    if 'device' in query:
+        device = DeviceByName[query['device']]
+        #print "Device %s is type %s" % (query['device'],device.Type)
+        if device.Type == 'URL':
+            URL = string.Template(device.url).substitute(query)
+            #print "Processing URL: %s" % URL
+            PostData = json.dumps(query)
+            r = requests.post(url = URL, data = PostData)
+            #print "Returned: %s" % r.text
+            return r.text
+    else:
+        device = None
+
     if commandFromSettings.startswith("PRINT "):
         return string.Template(commandFromSettings[6:]).substitute(query)
     elif commandFromSettings.startswith("SH "):
@@ -115,6 +131,11 @@ def checkMacros(commandFromSettings,query):
         return setStatus(commandFromSettings[6:],"0",query)
     elif commandFromSettings.startswith("TOGGLE "):
         return toggleStatus(commandFromSettings[7:],query)
+    elif commandFromSettings.startswith("RELAY "):
+        device = commandFromSettings[6:]
+        query['device'] = device
+        #print "Relaying %s to %s" % (query['command'],device)
+        return sendCommand(query['command'],query)
     elif commandFromSettings.startswith("MACRO "):
         expandedCommand = string.Template(commandFromSettings[6:]).substitute(query)
         commandFromSettings = expandedCommand.strip()
@@ -184,7 +205,7 @@ def execute_test(command,query):
     try:
         valueToTest = settingsFile.get(section,"value")
         value = getStatus(valueToTest,query)
- #       print("TEST returned %s" % value)
+        print("TEST returned %s" % value)
         if value == "1":
             rawcommand = settingsFile.get(section,"on")
         else:
@@ -302,7 +323,7 @@ def execute_timer(command,query):
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query):
-#    print ("LOGIC %s" % command)
+    print ("LOGIC %s" % command)
     section = "LOGIC "+command
     newcommand = None
     try:

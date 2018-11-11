@@ -27,8 +27,12 @@ for section in settings.sections():
         continue
     #- These are devices
     print ("Reading device configuration for %s" % section)
-    Dev[section,'IPAddress'] = settings.get(section,'IPAddress').strip()
-    Dev[section,'MACAddress'] = netaddr.EUI(settings.get(section, 'MACAddress'))
+    if settings.has_option(section,'IPAddress'):
+        Dev[section,'IPAddress'] = settings.get(section,'IPAddress').strip()
+    if settings.has_option(section,'IPAddress'):
+        Dev[section,'MACAddress'] = netaddr.EUI(settings.get(section, 'MACAddress'))
+    if settings.has_option(section,'URL'):
+        Dev[section,'URL'] = settings.get(section,'URL').strip()
     if settings.has_option(section,'Timeout'):
         Dev[section,'Timeout'] = int(settings.get(section, 'Timeout').strip())
     else:
@@ -37,13 +41,16 @@ for section in settings.sections():
         Dev[section,'Delay'] = float(settings.get(section, 'Delay').strip())
     else:
         Dev[section,'Delay'] = 0.0
-    print '''Setting "%s" delay to "%s"''' % (section,Dev[section,'Delay'])
+    #print '''Setting "%s" delay to "%s"''' % (section,Dev[section,'Delay'])
     if settings.has_option(section,'Device'):
         Dev[section,'Device'] = int(settings.get(section, 'Device').strip(),16)
     else:
         Dev[section,'Device'] = None
     if settings.has_option(section,'Type'):
         Dev[section,'Type'] = settings.get(section,'Type').strip()
+    #    print ("Config: %s device has Type: %s" % (section,Dev[section,'Type']))
+    elif settings.has_option(section,'URL'):
+        Dev[section,'Type'] = 'URL'
     else:
         Dev[section,'Type'] = section.strip()[-2:]
     if settings.has_option(section,'StartUpCommand'):

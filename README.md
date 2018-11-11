@@ -131,5 +131,11 @@ Parameters are parsed as URL params, then POST values, then settings params
 
 11) New RADIO button support.  See docs in macros.txt
 
+12) New device section that just has an URL as a parameter.  Any commands
+sent to this device just make a web request to the given URL.  All current
+parameters are sent in json as POST parameters.  Variable expansion is
+allowed.  This is mainly used with the new RELAY parameter to allow macros
+to relay commands to devices controlled via IFTTT or other services.
+
 **TODO: REWRITE ALL DOCUMENTATION**
 

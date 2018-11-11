@@ -28,6 +28,7 @@ right value you may use an instruction such as:
             WARNING!  $parameters are passed directly to the OS!  However,
             shell expansions and such are NOT done.  There is no shell!
     CANCEL  And a single variable, the timer to cancel
+    RELAY   followed by a device to relay the command to
 
 Any other "rvalue" should be either a real IR code or a command defined
 elsewhere.  You may define commands in either the command section, or using

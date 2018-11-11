@@ -15,6 +15,7 @@ import re
 import collections
 import platform
 import pdb
+from devices import devices, DeviceByName
 from os import path
 from Crypto.Cipher import AES
 
@@ -225,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def sendCommand(commandName,params):
     deviceName = params["device"]
-#    print '''SendCommand: %s to "%s"''' % (commandName,deviceName)
+    #print '''SendCommand: %s to "%s"''' % (commandName,deviceName)
     if deviceName == None:
         device = devices[0]
         serviceName = 'Commands'
@@ -237,49 +238,59 @@ def sendCommand(commandName,params):
         return "Failed: No such device, %s" % deviceName
     if params["deviceDelay"] == None:
         params["deviceDelay"] = 0.2
-
-    origCommand = commandName
-    if 'PRINT' not in commandName and 'MACRO' not in commandName:
-        if 'on' in commandName or 'off' in commandName:
-            status = commandName.rsplit('o', 1)[1]
-            newCommandName = commandName.rsplit('o', 1)[0]
-            if 'n' in status:
-                result = setStatus(newCommandName, '1', params)
-            elif 'ff' in status:
-                result = setStatus(newCommandName, '0', params)
+    #print "Sending %s to %s, a type %s device" % (commandName, deviceName, device.Type)
+    params["command"] = commandName
 
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
-        # print ("checkCond result: %s = %s" % (commandName,result))
+        #print ("checkCond result: %s = %s" % (commandName,result))
         if result:
             return result
+
+        newCommandName = ''
+        if 'PRINT' not in commandName and 'MACRO' not in commandName:
+            if 'on' in commandName or 'off' in commandName:
+                status = commandName.rsplit('o', 1)[1]
+                newCommandName = commandName.rsplit('o', 1)[0]
+                if 'n' in status:
+                    result = setStatus(newCommandName, '1', params)
+                elif 'ff' in status:
+                    result = setStatus(newCommandName, '0', params)
+
+        #print "Command Name: %s  New: %s" % (commandName, newCommandName)
         if settingsFile.has_option(serviceName, commandName):
-            commandName = settingsFile.get(serviceName, commandName)
+            command = settingsFile.get(serviceName, commandName)
         elif settingsFile.has_option('Commands', commandName):
-            commandName = settingsFile.get('Commands', commandName)
+            command = settingsFile.get('Commands', commandName)
+        elif settingsFile.has_option(serviceName, newCommandName):
+            command = settingsFile.get(serviceName, newCommandName)
+        elif settingsFile.has_option('Commands', newCommandName):
+            command = settingsFile.get('Commands', newCommandName)
+        else:
+            command = commandName   #- hack for rawcommand from Timers
 
-        result = macros.checkMacros(commandName,params)
-        # print ("Macro Result: %s = %s" % (commandName,result))
+        result = macros.checkMacros(command,params)
+        #print ("Macro Result: %s = %s" % (command,result))
         if result:
             return result
-
         try:
             deviceKey = device.key
             deviceIV = device.iv
 
-            decodedCommand = binascii.unhexlify(commandName)
+            decodedCommand = binascii.unhexlify(command)
             AESEncryption = AES.new(str(deviceKey), AES.MODE_CBC, str(deviceIV))
             encodedCommand = AESEncryption.encrypt(str(decodedCommand))
 
             finalCommand = encodedCommand[0x04:]
         except:
-            return False    #- No such command
-
+            print "Decode Failure"
+            return False
         try:
             device.send_data(finalCommand)
         except Exception:
-            return "Probably timed out.."
-        return origCommand
+            print "Probably timed out.."
+            return False
+        return commandName
     else:
         return False
 
@@ -354,21 +365,21 @@ def setStatus(commandName, status, params):
             section = "SET " + commandName
             if settingsFile.has_option(section, "trigger"):
                 rawcommand = settingsFile.get(section, "trigger")
-                #print ("Triger = %s" % rawcommand)
+                print ("Trigger = %s" % rawcommand)
                 macros.eventList.add(commandName,1,rawcommand,params)
             else:
                 try:
                     value = getStatus(commandName,params)
-#                   print("TEST returned %s" % value)
+                    print("TEST returned %s" % value)
                     if value == "1":
                         rawcommand = settingsFile.get(section,"on")
                     else:
                         rawcommand = settingsFile.get(section,"off")
-                    # print ("Raw: %s" % rawcommand)
+                    print ("Raw: %s" % rawcommand)
                     macros.eventList.add(commandName,1,rawcommand,params)
                 except StandardError as e:
                     print("SET %s: A trigger or on/off pair is required" % commandName)
-                    # print ("ERROR was %s" % e)
+                    print ("ERROR was %s" % e)
         elif settingsFile.has_section("LOGIC "+commandName):
             macros.eventList.add(commandName,1,commandName,params)
             print ("Queued LOGIC branch: %s" % commandName)
@@ -518,7 +529,6 @@ def readSettingsFile():
         settingsFile.remove_option('General','Autodetect')
 
     # Device list
-    DeviceByName = {}
     if not settings.DevList:
         Autodetect = True
 
@@ -558,32 +568,35 @@ def readSettingsFile():
         except StandardError as e:
             print ("Error writing settings file: %s" % e)
             restoreSettings()
-    else:
-        devices = []
     if settings.DevList:
         for devname in settings.DevList:
             if Dev[devname,'Type'] == 'RM' or Dev[devname,'Type'] == 'RM2':
                 device = broadlink.rm((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            if Dev[devname,'Type'] == 'MP1':
+            elif Dev[devname,'Type'] == 'MP1':
                 device = broadlink.mp1((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            if Dev[devname,'Type'] == 'SP1':
+            elif Dev[devname,'Type'] == 'SP1':
                 device = broadlink.sp1((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            if Dev[devname,'Type'] == 'SP2':
+            elif Dev[devname,'Type'] == 'SP2':
                 device = broadlink.sp2((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            if Dev[devname,'Type'] == 'A1':
+            elif Dev[devname,'Type'] == 'A1':
                 device = broadlink.a1((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            if Dev[devname,'Type'] == 'HYSEN':
+            elif Dev[devname,'Type'] == 'HYSEN':
                 device = broadlink.hysen((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            if Dev[devname,'Type'] == 'S1C':
+            elif Dev[devname,'Type'] == 'S1C':
                 device = broadlink.S1C((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            if Dev[devname,'Type'] == 'DOOYA':
+            elif Dev[devname,'Type'] == 'DOOYA':
                 device = broadlink.dooya((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
+            elif Dev[devname,'Type'] == 'URL':
+                device = type('', (), {})()
+                device.url = Dev[devname,'URL']
             device.timeout = Dev[devname,'Timeout']
+            device.Type = Dev[devname,'Type']
+            print "Setting %s to Type %s" % (devname,device.Type)
             if not devname in DeviceByName:
                 device.hostname = devname
-                device.auth()
+                if hasattr(device, 'auth'):
+                    device.auth()
                 devices.append(device)
-                print ("%s: Read %s on %s (%s)" % (devname, device.type, str(device.host[0]), device.mac))
             DeviceByName[devname] = device
             if Dev[devname,'StartUpCommand'] != None:
                 commandName = Dev[devname,'StartUpCommand']
