@@ -1,7 +1,8 @@
 MACRO LANGUAGE
---------------
+==============
 
 INTRO
+-----
 
 The new macro language is considered experimental.  Not all functions have
 been tested.  The system is based on virtual commands.  In addition to the
@@ -28,7 +29,11 @@ right value you may use an instruction such as:
             WARNING!  $parameters are passed directly to the OS!  However,
             shell expansions and such are NOT done.  There is no shell!
     CANCEL  And a single variable, the timer to cancel
-    RELAY   followed by a device to relay the command to
+    RELAY   followed by a device to relay the command to.  This is only
+            here so that you don't have to use command(device=xxxx) in
+            a million places.  If you prefer, you can set a device for
+            a command using parameter syntax if you need to, and even
+            set it to a parameter.  Likewise "RELAY $otherdevice" works
 
 Any other "rvalue" should be either a real IR code or a command defined
 elsewhere.  You may define commands in either the command section, or using
@@ -42,20 +47,32 @@ Multiple parameters can be set by command separating them.  You can
 even set the device used (to make a command on one device trigger another)
 by setting the "device" parameter to the named device section.  The variables
 in Status sections are unrelated.  If you wish to test a passed parameter,
-such as in a LOGIC section, you will currently need to use a SET command to
-set the Status variable from the passed parameter.  This may be changed to
-allow Status variables to be defaults for parameters in the future.
-
+use the format $status(varname).  This will always be the word "status",
+in all lowercase, with the name of the status variable in parenthesis.
 
 
 VARIABLES
+---------
 
 The Status section is now made up of both a global and a per-device section,
 depending on the URL used.  It is not restricted to just 0 or 1 values.  The
-status section now allows storage variables for logical expressions.
+status section now allows storage variables for logical expressions.  You
+can test and set status variables as well as expand parameters passed from
+the URL.
+
+You'll notice that commands that end in on or off automatically set a status
+variable to 1 or 0.  This then looks for command without the on or off.  If
+such a command exists, it is assumed to be a toggle and ONLY sent if the
+value of the associated status variable has changed.  You should make sure
+that no other sources (such as a manual remote) send this code so that the
+variable stays in sync.  If there is no such command, but an exact match
+(with the on/off at the end) is defined, then this command is sent without
+regard to the state of the status variable, although the value is still
+written to allow queries from external interfaces.
 
 
 SECTIONS
+--------
 
 Special sections start with a keyword, a space, and the name of the virtual
 command which you want to define.  Parameters to the device are listed as
@@ -156,7 +173,7 @@ meaning the test is less, more, or equal to the compare value
 NOTE: You can use a LOGIC section to perform loops and other controls
 
 
-EXAMPLE#1
+EXAMPLE #1
 
 This simple example demonstrates a simple macro using a timer.  You should
 always use a timer rather than very long sleep values.  A sleep value will
@@ -174,7 +191,7 @@ seconds = 30
 command = mute
 
 
-EXAMPLE#2
+EXAMPLE #2
 
 Let's say you want to keep track of the status of a device, to refer to it.
 
@@ -229,7 +246,36 @@ when the "guess" is set.  The user will get one of the printed lines hinting
 about what value to guess next.
 
 
+WEBHOOK RELAY
+-------------
+
+Since this one script can't handle everything, sometimes you might want to
+hand off some commands to an external system.  You can use the shell feature
+or the new RELAY to hand off to a Webhooks URL.  This lets you execute large
+macros where different commands are handled by different devices.
+
+External webhook devices are specified with just a URL.  All parameters
+are sent with the request (currently, only Post).  Adding additional
+parameters will be supported in the future if anyone needs this feature.
+The current command name can be passed as a parameter.  See the example.
+
+EXAMPLE #1
+
+[LivingRoom]
+livingRoomLamp = XXXXXXXXXXXX--- IR Command ---XXXXXXXXXXXX
+turnoffalllights = MACRO kitchenLightoff livingRoomLampoff
+kitchenLightoff = RELAY IFTTT
+
+[IFTTT]
+URL = https://maker.ifttt.com/trigger/$command/with/key/$status(API_KEY)
+
+[IFTTT Status]
+API_KEY = XXXXXX-YYYYY_ZZZ
+kitchenLight = 1
+
+
 CONCLUSION
+----------
 
 This is just a server framework.  It should be complemented with appropriate
 logic elsewhere, such as javascript.  By allowing the REST server to make

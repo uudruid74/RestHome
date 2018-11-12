@@ -8,6 +8,11 @@ Uses [python-broadlink](https://github.com/mjg59/python-broadlink)
 
 Based and inspired by [BlackBeanControl](https://github.com/davorf/BlackBeanControl)
 
+Now requires "termcolor" module for more readable output.
+````
+pip install termcolor
+````
+
 Example usage
 -------------
 
@@ -136,6 +141,12 @@ sent to this device just make a web request to the given URL.  All current
 parameters are sent in json as POST parameters.  Variable expansion is
 allowed.  This is mainly used with the new RELAY parameter to allow macros
 to relay commands to devices controlled via IFTTT or other services.
+
+13) Status variables are now supported for variable expansions.  Regular
+parameters are still of the form $variableName, while a status variable from
+your file is of the format $status(statusName).  This can be used for API
+keys in IFTTT URLs, repeat counts (like my Vizio always changing what
+applets are in the menu, so my button count to get to haystack changes!)
 
 **TODO: REWRITE ALL DOCUMENTATION**
 

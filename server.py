@@ -9,12 +9,14 @@ import signal
 import socket
 import errno
 import json
+import requests
 import shutil
 import macros
 import re
 import collections
 import platform
 import pdb
+from termcolor import cprint
 from devices import devices, DeviceByName
 from os import path
 from Crypto.Cipher import AES
@@ -65,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
                         return self.access_denied()
                     return self.messageHandler()
                 except NameError as e:
-                    print ("Error: %s" % e)
+                    cprint ("Error: %s" % e,"yellow")
                     self.password_required()
         except NameError:                   #- No security specified
             self.messageHandler()
@@ -82,7 +84,7 @@ class Handler(BaseHTTPRequestHandler):
             if GlobalPassword and GlobalPassword == password:
                 return self.messageHandler()
             else:
-                print ('''POST Password Wrong: "%s"''' % password)
+                cprint ('''POST Password Wrong: "%s"''' % password,"red")
         except NameError:
                 return self.password_required()
         self.password_required()
@@ -90,14 +92,14 @@ class Handler(BaseHTTPRequestHandler):
     def password_required(self):
         response = "POST Password required from %s" % self.client_address[0]
         self.wfile.write('''{ "error": "%s" }''' % response)
-        print (response)
+        cprint (response,"red")
         self.close_connection = 1
         return False
 
     def access_denied(self):
         response = "Client %s is not allowed to use GET!" % self.client_address[0]
         self.wfile.write('''{ "error": "%s" }''' % response)
-        print (response)
+        cprint (response,"red")
         self.close_connection = 1
         return False
 
@@ -115,7 +117,7 @@ class Handler(BaseHTTPRequestHandler):
         if 'learnCommand' in self.path:
             try:
                 if self.client_address[0] not in LearnFrom:
-                    print ("Won't learn commands from %s.  Access Denied!" % self.client_address[0])
+                    cprint ("Won't learn commands from %s.  Access Denied!" % self.client_address[0],"red",attrs=['bold'])
                     return False
             except NameError:
                 pass
@@ -221,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(response)
         else:
             self.wfile.write('''{ "ok": "%s" }''' % response)
-        print ("\t"+response)
+        cprint ("\t"+response,"cyan")
         print ""
 
 def sendCommand(commandName,params):
@@ -249,13 +251,12 @@ def sendCommand(commandName,params):
 
         newCommandName = ''
         if 'PRINT' not in commandName and 'MACRO' not in commandName:
-            if 'on' in commandName or 'off' in commandName:
-                status = commandName.rsplit('o', 1)[1]
-                newCommandName = commandName.rsplit('o', 1)[0]
-                if 'n' in status:
-                    result = setStatus(newCommandName, '1', params)
-                elif 'ff' in status:
-                    result = setStatus(newCommandName, '0', params)
+            if commandName.endswith("on"):
+                newCommandName = commandName[:-2]
+                setStatus(newCommandName, '1', params)
+            elif commandName.endswith("off"):
+                newCommandName = commandName[:-3]
+                setStatus(newCommandName, '0', params)
 
         #print "Command Name: %s  New: %s" % (commandName, newCommandName)
         if settingsFile.has_option(serviceName, commandName):
@@ -273,6 +274,17 @@ def sendCommand(commandName,params):
         #print ("Macro Result: %s = %s" % (command,result))
         if result:
             return result
+
+        if 'device' in params:
+            #print "Device %s is type %s" % (params['device'],device.Type)
+            if device.Type == 'URL':
+                URL = macros.expandVariables(device.url,params)
+                #print "Processing URL: %s" % URL
+                PostData = json.dumps(params)
+                r = requests.post(url = URL, data = PostData)
+                #print "Returned: %s" % r.text
+                return r.text
+
         try:
             deviceKey = device.key
             deviceIV = device.iv
@@ -283,12 +295,12 @@ def sendCommand(commandName,params):
 
             finalCommand = encodedCommand[0x04:]
         except:
-            print "Decode Failure"
+            cprint ("Decode Failure","yellow")
             return False
         try:
             device.send_data(finalCommand)
         except Exception:
-            print "Probably timed out.."
+            cprint ("Probably timed out..","yellow")
             return False
         return commandName
     else:
@@ -306,10 +318,10 @@ def learnCommand(commandName, params):
         return "Failed: No such device, %s" % deviceName
 
     if OverwriteProtected and settingsFile.has_option(sectionName,commandName):
-        print ("Command %s alreadyExists and changes are protected!" % commandName)
+        cprint ("Command %s alreadyExists and changes are protected!" % commandName,"yellow")
         return False
 
-    print ("Waiting %d seconds to capture command" % GlobalTimeout)
+    cprint ("Waiting %d seconds to capture command" % GlobalTimeout,"magenta")
 
     deviceKey = device.key
     deviceIV = device.iv
@@ -319,7 +331,7 @@ def learnCommand(commandName, params):
     LearnedCommand = device.check_data()
 
     if LearnedCommand is None:
-        print('Command not received')
+        cprint('Command not received',"yellow")
         return False
 
     AdditionalData = bytearray([0x00, 0x00, 0x00, 0x00])
@@ -338,7 +350,7 @@ def learnCommand(commandName, params):
         broadlinkControlIniFile.close()
         return commandName
     except StandardError as e:
-        print("Error writing settings file: %s" % e)
+        cprint("Error writing settings file: %s" % e,"yellow")
         restoreSettings()
         return False
 
@@ -352,7 +364,7 @@ def setStatus(commandName, status, params):
     backupSettings()
     oldvalue = getStatus(commandName,params)
     if oldvalue == status:
-        print "Value of %s not changed: %s" % (commandName, status)
+        cprint ("Value of %s not changed: %s" % (commandName, status), "cyan")
         return oldvalue
     try:
         if not settingsFile.has_section(sectionName):
@@ -365,27 +377,27 @@ def setStatus(commandName, status, params):
             section = "SET " + commandName
             if settingsFile.has_option(section, "trigger"):
                 rawcommand = settingsFile.get(section, "trigger")
-                print ("Trigger = %s" % rawcommand)
+                #print ("Trigger = %s" % rawcommand)
                 macros.eventList.add(commandName,1,rawcommand,params)
             else:
                 try:
                     value = getStatus(commandName,params)
-                    print("TEST returned %s" % value)
+                    #print("TEST returned %s" % value)
                     if value == "1":
                         rawcommand = settingsFile.get(section,"on")
                     else:
                         rawcommand = settingsFile.get(section,"off")
-                    print ("Raw: %s" % rawcommand)
+                    #print ("Raw: %s" % rawcommand)
                     macros.eventList.add(commandName,1,rawcommand,params)
                 except StandardError as e:
-                    print("SET %s: A trigger or on/off pair is required" % commandName)
-                    print ("ERROR was %s" % e)
+                    cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
+                    cprint ("ERROR was %s" % e,"yellow")
         elif settingsFile.has_section("LOGIC "+commandName):
             macros.eventList.add(commandName,1,commandName,params)
-            print ("Queued LOGIC branch: %s" % commandName)
+            cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
         return oldvalue
     except StandardError as e:
-        print ("Error writing settings file: %s" % e)
+        cprint ("Error writing settings file: %s" % e,"yellow")
         restoreSettings()
         return False
 
@@ -448,13 +460,13 @@ def start(server_class=Server, handler_class=Handler, port=8080, listen='0.0.0.0
     server_address = (listen, port)
     httpd = server_class(server_address, handler_class)
     httpd.timeout = timeout
-    print ('\nStarting broadlink-rest server on %s:%s ...' % (listen,port))
+    cprint ('\nStarting broadlink-rest server on %s:%s ...' % (listen,port),"green")
     while not InterruptRequested:
         timer = min(timeout,macros.eventList.nextEvent())
         while timer < 1:
             event = macros.eventList.pop()
             result = sendCommand(event.command,event.params)
-            print "TIMER EXPIRED - %s (%s)\n\tresult: %s" % (event.name, event.command, result)
+            cprint ("TIMER EXPIRED - %s (%s)\n\tresult: %s" % (event.name, event.command, result),"blue")
             timer = min(timeout,macros.eventList.nextEvent())
         httpd.timeout = timer
         httpd.handle_request()
@@ -466,7 +478,7 @@ def restoreSettings():
     if path.isfile(settings.settingsINI+".bak"):
         shutil.copy2(settings.settingsINI+".bak",settings.settingsINI)
     else:
-        print ("Can't find backup to restore!  Refusing to make this worse!")
+        cprint ("Can't find backup to restore!  Refusing to make this worse!","yellow")
         sys.exit()
 
 def readSettingsFile():
@@ -533,7 +545,7 @@ def readSettingsFile():
         Autodetect = True
 
     if Autodetect == True:
-        print ("Beginning device auto-detection ... ")
+        cprint ("Beginning device auto-detection ... ","cyan")
         # Try to support multi-homed broadcast better
         try:
             devices = broadlink.discover(DiscoverTimeout,listen_address,broadcast_address)
@@ -566,7 +578,7 @@ def readSettingsFile():
             settingsFile.write(broadlinkControlIniFile)
             broadlinkControlIniFile.close()
         except StandardError as e:
-            print ("Error writing settings file: %s" % e)
+            cprint ("Error writing settings file: %s" % e,"yellow")
             restoreSettings()
     if settings.DevList:
         for devname in settings.DevList:
@@ -607,12 +619,12 @@ def readSettingsFile():
     return { "port": serverPort, "listen": listen_address, "timeout": GlobalTimeout }
 
 def SigUsr1(signum, frame):
-    print ("\nReloading configuration ...")
+    cprint ("\nReloading configuration ...","cyan")
     global InterruptRequested
     InterruptRequested = True
 
 def SigInt(signum, frame):
-    print ("\nShuting down server ...")
+    cprint ("\nShuting down server ...","cyan")
     global ShutdownRequested
     global InterruptRequested
     ShutdownRequested = True

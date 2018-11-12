@@ -4,9 +4,9 @@ import time
 from platform import system as system_name
 from math import ceil as ceiling
 from devices import devices, DeviceByName
+from termcolor import cprint
 import subprocess
 import json
-import requests
 
 def append(a,b):
     if a.strip() == '':
@@ -63,7 +63,7 @@ class EventList(object):
         if found:
             found.params = dict(found.params, **params)
             if found.command != command:
-                print "WARNING: Event %s overwrites old command: %s" % (name,found.command)
+                cprint ("WARNING: Event %s overwrites old command: %s" % (name,found.command),"yellow")
                 found.command = command
         else:
             found = EventNode(name,fire,command,params)
@@ -94,25 +94,29 @@ eventList = EventList()
 #-
 #- TODO - allow status vars as parameters
 #-
+def expandVariables(commandString,query):
+    statusVar = commandString.find("$status(")
+    while statusVar > -1:
+        endVar = commandString.find(")",statusVar)
+        if endVar < 0:
+            cprint ("No END Parenthesis found in $status variable","yellow")
+            statusVar = -1
+        varname = commandString[statusVar+8:endVar]
+        varvalue = getStatus(varname,query)
+        commandString = commandString.replace(commandString[statusVar:endVar+1],varvalue)
+        #print "%s = %s" % (varname,varvalue)
+        #print "new: %s" % commandString
+        statusVar = commandString.find("$status(")
+    firstPass = commandString
+    secondPass = string.Template(firstPass).substitute(query)
+    return secondPass
+
 def checkMacros(commandFromSettings,query):
     #print ("checkMacros %s" % commandFromSettings)
-    if 'device' in query:
-        device = DeviceByName[query['device']]
-        #print "Device %s is type %s" % (query['device'],device.Type)
-        if device.Type == 'URL':
-            URL = string.Template(device.url).substitute(query)
-            #print "Processing URL: %s" % URL
-            PostData = json.dumps(query)
-            r = requests.post(url = URL, data = PostData)
-            #print "Returned: %s" % r.text
-            return r.text
-    else:
-        device = None
-
     if commandFromSettings.startswith("PRINT "):
-        return string.Template(commandFromSettings[6:]).substitute(query)
+        return expandVariables(commandFromSettings[6:],query)
     elif commandFromSettings.startswith("SH "):
-        return shellCommand(string.Template(commandFromSettings[3:]).substitute(query))
+        return shellCommand(expandVariables(commandFromSettings[3:],query))
     elif commandFromSettings.startswith("SET "):
         return setStatus(commandFromSettings[4:],"1",query)
     elif commandFromSettings.startswith("INC "):
@@ -137,7 +141,7 @@ def checkMacros(commandFromSettings,query):
         #print "Relaying %s to %s" % (query['command'],device)
         return sendCommand(query['command'],query)
     elif commandFromSettings.startswith("MACRO "):
-        expandedCommand = string.Template(commandFromSettings[6:]).substitute(query)
+        expandedCommand = expandVariables(commandFromSettings[6:],query)
         commandFromSettings = expandedCommand.strip()
         result = ''
         for command in commandFromSettings.split():
@@ -163,14 +167,14 @@ def checkMacros(commandFromSettings,query):
                         for x in range(0,int(repeatAmount)):
                             sendCommand(actualCommand,query)
                 except StandardError as e:
-                    print ("Skipping malformed command: %s, %s" % (command,e))
+                    cprint ("Skipping malformed command: %s, %s" % (command,e),"yellow")
                 continue
             if command.startswith("sleep"):
                 result = append(result,command)
                 try:
                     time.sleep(int(command[5:]))
                 except:
-                    print ("Invalid sleep time: %s; sleeping 2s" % command[5:])
+                    cprint ("Invalid sleep time: %s; sleeping 2s" % command[5:],"yellow")
                     time.sleep(2)
             else:
                 # print ("Executing %s" % command)
@@ -196,7 +200,7 @@ def execute_wol(command,query):
             port = settingsFile.get(section,"port")
         return wol.wake(mac,ip,port)
     except StandardError as e:
-        print ("Failed: %s" % e)
+        cprint ("WOL Failed: %s" % e,"yellow")
     return False
 
 #- Test a variable for true/false
@@ -205,7 +209,7 @@ def execute_test(command,query):
     try:
         valueToTest = settingsFile.get(section,"value")
         value = getStatus(valueToTest,query)
-        print("TEST returned %s" % value)
+        #print("TEST returned %s" % value)
         if value == "1":
             rawcommand = settingsFile.get(section,"on")
         else:
@@ -213,7 +217,7 @@ def execute_test(command,query):
         # print ("Raw: %s" % rawcommand)
         return sendCommand(rawcommand,query)
     except StandardError as e:
-        print ("Failed: %s" % e)
+        cprint ("TEST Failed: %s" % e,"yellow")
     return False
 
 #- Execute shell command, short MACRO version
@@ -235,11 +239,11 @@ def execute_shell(command,query):
     section = "SHELL " + command
     parameters = None
     if settingsFile.has_option(section,"parameters"):
-        parameters = string.Template(settingsFile.get(section,"parameters")).substitute(query)
+        parameters = expandVariables(settingsFile.get(section,"parameters"),query)
     if settingsFile.has_option(section,"command"):
-        command = string.Template(settingsFile.get(section,"command")).substitute(query)
+        command = expandVariables(settingsFile.get(section,"command"),query)
     else:
-        print ("You must specify at least a \"command\" for any SHELL command")
+        cprint ("You must specify at least a \"command\" for any SHELL command","yellow")
     execCommand = command
     if parameters != None:
         execCommand = [command,parameters]
@@ -276,7 +280,7 @@ def execute_check(command,query):
         result = sendCommand(rawcommand,query)
         return result
     except StandardError as e:
-        print ("Failed: %s" % e)
+        cprint ("CHECK Failed: %s" % e,"yellow")
     return False
 
 def execute_radio(command,query):
@@ -286,7 +290,7 @@ def execute_radio(command,query):
         newstatus = query["button"]
         mult = 1.0
         if (status == newstatus):
-            print "RADIO button already at state = %s" % status
+            cprint ("RADIO button already at state = %s" % status,"cyan")
             return status
         else:
             off = "button" + status + "off"
@@ -300,7 +304,7 @@ def execute_radio(command,query):
                 eventList.add(command+"on",ceiling(query['deviceDelay']*mult),onCommand,query)
             return setStatus(command,newstatus,query)
     except StandardError as e:
-        print ("Failed: %s" % e)
+        cprint ("RADIO Failed: %s" % e,"yellow")
     return False
 
 def execute_timer(command,query):
@@ -318,12 +322,12 @@ def execute_timer(command,query):
         eventList.add(command,delay,command,query)
         return command
     except StandardError as e:
-        print ("Failed: %s" % e)
+        cprint ("TIMER Failed: %s" % e,"yellow")
     return False
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query):
-    print ("LOGIC %s" % command)
+    #print ("LOGIC %s" % command)
     section = "LOGIC "+command
     newcommand = None
     try:
@@ -346,13 +350,13 @@ def execute_logicnode(command,query):
             value = float(value)
             if settingsFile.has_option(section,"compare"):
                 compareVar = settingsFile.get(section,"compare")
-                print ("%s = %s" % (compareVar,getStatus(compareVar,query)))
+                #print ("%s = %s" % (compareVar,getStatus(compareVar,query)))
                 compare = float(getStatus(compareVar,query))
-                print ("compare = %s = %s" % (compareVar,compare))
+                #print ("compare = %s = %s" % (compareVar,compare))
             else:
                 compare = 0
             newvalue = value - compare
-            print ("newvalue = %s" % newvalue)
+            #print ("newvalue = %s" % newvalue)
             if newvalue < 0:
                 if settingsFile.has_option(section,"less"):
                     newcommand = settingsFile.get(section,"less")
@@ -383,7 +387,7 @@ def execute_logicnode(command,query):
                 newcommand = settingsFile.get(section,"error")
             return sendCommand(newcommand,query)
         except StandardError as e:
-            print ("Failed: %s" % e)
+            cprint ("LOGIC Failed: %s" % e,"yellow")
         return False
 
 def checkConditionals(command,query):
