@@ -1,4 +1,3 @@
-m
 Broadlink HTTP server/proxy with REST API
 ==================================
 Supported devices: RM/RM2/RM Pro/RM3/BlackBean/A1
