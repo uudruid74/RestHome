@@ -9,9 +9,11 @@ settingsINI = path.join(applicationDir, 'settings.ini')
 settings = configparser.ConfigParser()
 settings.read(settingsINI)
 
-DiscoverTimeout = GlobalTimeout = 5
+DiscoverTimeout = GlobalTimeout = 20
 if settings.has_option('General', 'Timeout'):
     DiscoverTimeout = GlobalTimeout = int(settings.get('General', 'Timeout').strip())
+if settings.has_option('General', 'DiscoverTimeout'):
+    DiscoverTimeout = int(settings.get('General','DiscoverTimeout').strip())
 
 DevList = []
 Dev = defaultdict(dict)

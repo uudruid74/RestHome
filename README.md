@@ -1,8 +1,9 @@
-m
 Broadlink HTTP server/proxy with REST API
-==================================
+=========================================
 Supported devices: RM/RM2/RM Pro/RM3/BlackBean/A1
 -------------------------------------------------
+
+UPDATE: Now multi-threaded !!!
 
 Uses [python-broadlink](https://github.com/mjg59/python-broadlink)
 
@@ -24,12 +25,14 @@ The [General] section contains the following optional parameters
 - **serverAddress** = IP to listen on, rather than 0.0.0.0
 - **serverPort** = listen port (defaults to 8080)
 - **Timeout** = Default timeout for network operations in tenths of a second
+- **DiscoverTimeout** = Device discovery timeout, defaults to the same as Timeout
 - **learnFrom** = IP addresses that can issue new commands to learn from (default is any)
 - **broadcastAddress** = a pending patch to python-broadlink will allow device discover to use a specified broadcast IP
 - **Autodetect** = if set to a number, do device discover for the given number of seconds.  This option removes itself.
 - **allowOverwrite** = if set to anything, allow learned commands to overwrite an existing entry.  The default is to deny a command that is already learned
 - **restrictAccess** = restrict all operations to this list of IPs
 - **password** = allow password-protected POST operations from any address
+- **MaxThreads** = maximum number of processing threads, defaults to 8
 
 If _password_ is specified, then GET operations are only allowed from hosts in _restrictAccess_.  GET operations won't need a password, but they'll only be allowed from specific hosts.  There is currently no way to restrict hosts AND require a password, but _serverAddress_ combined with firewall rules on the underlying host would be solution for the security paranoid, setting _password_ and not _restrictAccess_.
 
@@ -46,8 +49,8 @@ http://localhost:8080/sendCommand/lampon    #send command with name lamp, set la
 ```
 If you have more than one device, use the alternate syntax
 ```
-http://localhost:8080/deviceName/learnCommand/lamp   #learn command with name lamp
-http://localhost:8080/deviceName/sendCommand/lampon    #send command with name lamp, set lamp to 1
+http://localhost:8080/deviceName/learnCommand/lamp      #learn command with name lamp
+http://localhost:8080/deviceName/sendCommand/lampon     #send command with name lamp, set lamp to 1
 ```
 
 4) Added get temperature from supported devices (like RM2/Pro):
@@ -147,6 +150,13 @@ parameters are still of the form $variableName, while a status variable from
 your file is of the format $status(statusName).  This can be used for API
 keys in IFTTT URLs, repeat counts (like my Vizio always changing what
 applets are in the menu, so my button count to get to haystack changes!)
+
+14) MultiThreaded!
+And now also returns data faster by giving shorter OK/FAIL messages rather
+than a list of commands run.  This means a command is OK if it's found,
+even if the command is a MACRO that contains commands that don't exist.
+Before, this would fail, but you could get a timeout waiting on a ton
+of commands.
 
 **TODO: REWRITE ALL DOCUMENTATION**
 

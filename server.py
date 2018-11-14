@@ -1,5 +1,5 @@
 #!/usr/bin/python
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+import threading
 import broadlink, configparser
 import sys, getopt
 import time, binascii
@@ -16,48 +16,52 @@ import re
 import collections
 import platform
 import pdb
+import SocketServer
+import BaseHTTPServer
 from termcolor import cprint
 from devices import devices, DeviceByName
 from os import path
 from Crypto.Cipher import AES
 
-class Server(HTTPServer):
-    def get_request(self):
-        result = None
-        while result is None:
-            timeout = min(self.timeout,macros.eventList.nextEvent())
-            if timeout < 1:
-                timeout = 0
-            try:
-                result = self.socket.accept()
-                result[0].setblocking(0)
-                result[0].settimeout(timeout)
-            except socket.timeout:
-                return
-        return result
+THROTTLE = 4    #- spawn per second
 
-    def server_bind(self):
-        HTTPServer.server_bind(self)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+class Thread(threading.Thread):
+    def __init__(self, i, sock, addr, timeout):
+        threading.Thread.__init__(self)
+        self.i = i
+        self.sock = sock
+        self.addr = addr
+        self.timeout = timeout
+        self.daemon = True
+        time.sleep(i/THROTTLE)
+        self.start()
+    def run(self):
+        httpd = BaseHTTPServer.HTTPServer(self.addr, Handler, False)
 
+        # Prevent the HTTP server from re-binding every handler.
+        # https://stackoverflow.com/questions/46210672/
+        httpd.socket = self.sock
+        httpd.server_bind = self.server_close = lambda self: None
+        while not InterruptRequested:
+            timer = min(self.timeout,macros.eventList.nextEvent())
+            while timer < 1:
+                event = macros.eventList.pop()
+                if event.name == "MACRO":
+                    result = macros.exec_macro(event.command,event.params)
+                else:
+                    result = sendCommand(event.command,event.params)
+#                cprint ("TIMER EXPIRED - %s (%s)\n\t%s" % (event.name, event.command, result),"blue")
+                timer = min(self.timeout,macros.eventList.nextEvent())
+            httpd.timeout = timer
+            httpd.handle_request()
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
     Parameters = collections.defaultdict(lambda : ' ')
     def _set_headers(self):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin','*')
         self.end_headers()
-
-    def handle(self):
-        self.close_connection = 0
-
-        while not self.close_connection:
-            try:
-                self.handle_one_request()
-            except IOError as e:
-                if e.errno == errno.EWOULDBLOCK:
-                    self.close_connection=1
 
     def do_GET(self):
         try:
@@ -223,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(response)
         else:
             self.wfile.write('''{ "ok": "%s" }''' % response)
-        cprint ("\t"+response,"cyan")
+        cprint ("\t"+response,"white")
         print ""
 
 def sendCommand(commandName,params):
@@ -294,8 +298,8 @@ def sendCommand(commandName,params):
             encodedCommand = AESEncryption.encrypt(str(decodedCommand))
 
             finalCommand = encodedCommand[0x04:]
-        except:
-            cprint ("Decode Failure","yellow")
+        except StandardError as e:
+            cprint("sendCommand: %s failed: %s" % (command,e),"yellow")
             return False
         try:
             device.send_data(finalCommand)
@@ -456,20 +460,16 @@ def getSensor(sensorName,params):
         pass    #- Ignore errors and just return false
     return False
 
-def start(server_class=Server, handler_class=Handler, port=8080, listen='0.0.0.0', timeout=1):
-    server_address = (listen, port)
-    httpd = server_class(server_address, handler_class)
-    httpd.timeout = timeout
+def start(handler_class=Handler, threads=8, port=8080, listen='0.0.0.0', timeout=20):
+    addr = (listen,port)
     cprint ('\nStarting broadlink-rest server on %s:%s ...' % (listen,port),"green")
-    while not InterruptRequested:
-        timer = min(timeout,macros.eventList.nextEvent())
-        while timer < 1:
-            event = macros.eventList.pop()
-            result = sendCommand(event.command,event.params)
-            cprint ("TIMER EXPIRED - %s (%s)\n\tresult: %s" % (event.name, event.command, result),"blue")
-            timer = min(timeout,macros.eventList.nextEvent())
-        httpd.timeout = timer
-        httpd.handle_request()
+    sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(addr)
+    sock.listen(5)
+
+    [Thread(i,sock,addr,timeout) for i in range(threads)]
+    time.sleep(9e9)
 
 def backupSettings():
     shutil.copy2(settings.settingsINI,settings.settingsINI+".bak")
@@ -521,6 +521,10 @@ def readSettingsFile():
     if settingsFile.has_option('General', 'restrictAccess'):
         RestrictAccess = settingsFile.get('General', 'restrictAccess').strip()
 
+    if settingsFile.has_option('General', 'MaxThreads'):
+        MaxThreads = settingsFile.get('General','MaxThreads')
+    else:
+        MaxThreads = 8
     if settingsFile.has_option('General', 'learnFrom'):
         LearnFrom = settingsFile.get('General', 'learnFrom').strip();
 
@@ -616,7 +620,7 @@ def readSettingsFile():
                 query["device"] = devname
                 macros.eventList.add("StartUp"+commandName,1,commandName,query)
 
-    return { "port": serverPort, "listen": listen_address, "timeout": GlobalTimeout }
+    return { "port": serverPort, "listen": listen_address, "threads": threads, "timeout": GlobalTimeout }
 
 def SigUsr1(signum, frame):
     cprint ("\nReloading configuration ...","cyan")

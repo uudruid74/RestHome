@@ -7,6 +7,7 @@ from devices import devices, DeviceByName
 from termcolor import cprint
 import subprocess
 import json
+import threading
 
 def append(a,b):
     if a.strip() == '':
@@ -25,75 +26,89 @@ class EventNode(object):
 
 class EventList(object):
     def __init__(self):
+#        print "creating Eventlist"
         self.begin = None
+        self.lock = threading.RLock()
     def nextEvent(self):
-        if self.begin != None:
-            return self.begin.timestamp - time.time()
-        else:
-            return 86400 #- 1 day
+        with self.lock:
+            if self.begin != None:
+                y = self.begin.timestamp - time.time()
+                return y
+            else:
+                return 86400 #- 1 day
     def insert(self,node):
-        node.nextNode = self.begin
-        #- insert into beginning
-        if self.begin == None or node.timestamp < node.nextNode:
-            #print "Insert at beginning"
-            self.begin = node
-        else:
-        #- insert into middle
-            #print "Insert in middle"
-            while node.nextNode.nextNode != None:
-                if node.timeStamp >= node.nextNode.timestamp:
-                    node.nextNode = node.nextNode.nextNode
-                else:
-                    node.nextNode = node
-                    node.nextNode = node.nextNode.nextNode
-                    return
-        #- insert at end
-            #print "Insert at end"
-            node.nextNode = node
-            node.nextNode = None
+#        print "Inserting"
+        with self.lock:
+            node.nextNode = self.begin
+            #- insert into beginning
+            if self.begin == None or node.timestamp < node.nextNode:
+                #print "Insert at beginning"
+                self.begin = node
+            else:
+            #- insert into middle
+                #print "Insert in middle"
+                while node.nextNode.nextNode != None:
+                    if node.timeStamp >= node.nextNode.timestamp:
+                        node.nextNode = node.nextNode.nextNode
+                    else:
+                        node.nextNode = node
+                        node.nextNode = node.nextNode.nextNode
+                        return
+            #- insert at end
+                #print "Insert at end"
+                node.nextNode = node
+                node.nextNode = None
     def pop(self):
-        retvalue = self.begin
-        if retvalue is not None and retvalue.nextNode is not None:
-            self.begin = retvalue.nextNode
-        else:
-            self.begin = None
-        return retvalue
+#        print "pop"
+        with self.lock:
+            retvalue = self.begin
+            if retvalue is not None and retvalue.nextNode is not None:
+                self.begin = retvalue.nextNode
+            else:
+                self.begin = None
+            return retvalue
     def add(self,name,fire,command,params):
-        found = self.find(name)
-        if found:
-            found.params = dict(found.params, **params)
-            if found.command != command:
-                cprint ("WARNING: Event %s overwrites old command: %s" % (name,found.command),"yellow")
-                found.command = command
-        else:
+#        print "add"
+        with self.lock:
+            if name != "MACRO":
+                found = self.find(name)
+                if found:
+                    found.params = dict(found.params, **params)
+                    if found.command != command:
+                        cprint ("WARNING: Event %s overwrites old command: %s" % (name,found.command),"yellow")
+                        found.command = command
+                    return
             found = EventNode(name,fire,command,params)
             self.insert(found)
     def find(self,name):
-        node = self.begin
-        while node != None:
-            if node.name == name:
-                return node
-            else:
-                node = node.nextNode
-        return None
+#        print "find"
+        with self.lock:
+            node = self.begin
+            while node != None:
+                if node.name == name:
+                    return node
+                else:
+                    node = node.nextNode
+            return None
     def delete(self,name):
-        node = self.begin
-        if node.name == name:
-            self.begin = self.begin.nextNode
-        while node.nextNode != None:
-            if node.nextNode.name == name:
-                found = node.nextNode
-                node.nextNode = node.nextNode.nextNode
-                return found
-            else:
-                node = node.nextNode
-        return None
+#        print "delete"
+        with self.lock:
+            node = self.begin
+            if node.name == name:
+                self.begin = self.begin.nextNode
+            while node.nextNode != None:
+                if node.nextNode.name == name:
+                    found = node.nextNode
+                    node.nextNode = node.nextNode.nextNode
+                    return found
+                else:
+                    node = node.nextNode
+            return None
 
 eventList = EventList()
 
 #-
-#- TODO - allow status vars as parameters
-#-
+#- TODO - allow $default(var), just like $status, only a param can override the value
 def expandVariables(commandString,query):
     statusVar = commandString.find("$status(")
     while statusVar > -1:
@@ -137,57 +152,72 @@ def checkMacros(commandFromSettings,query):
         return toggleStatus(commandFromSettings[7:],query)
     elif commandFromSettings.startswith("RELAY "):
         device = commandFromSettings[6:]
+        if device == query['device']:
+            cprint ("RELAY %s attempted to relay to itself" % query['command'],"yellow")
+            return False
         query['device'] = device
         #print "Relaying %s to %s" % (query['command'],device)
         return sendCommand(query['command'],query)
     elif commandFromSettings.startswith("MACRO "):
-        expandedCommand = expandVariables(commandFromSettings[6:],query)
-        commandFromSettings = expandedCommand.strip()
-        result = ''
-        for command in commandFromSettings.split():
-            # print ("Executing %s" % command)
-            if command == "sleep":
-                time.sleep(1)
-                result = append(result,command)
-                continue
-            if "(" in command:
-                paramstring= command[command.find("(")+1:command.find(")")]
-                command = command[:command.find("(")]
-                for param in paramstring.split(','):
-                    pair = param.split('=')
-                    query[pair[0]] = pair[1]
-                    # print ("Setting %s to %s" % (pair[0], pair[1]))
-            elif "," in command:
-                result = append(result,command)
-                try:
-                    (actualCommand, repeatAmount) = command.split(',')
-                    if actualCommand == "sleep":
-                        time.sleep(float(repeatAmount))
-                    else:
-                        for x in range(0,int(repeatAmount)):
-                            sendCommand(actualCommand,query)
-                except StandardError as e:
-                    cprint ("Skipping malformed command: %s, %s" % (command,e),"yellow")
-                continue
-            if command.startswith("sleep"):
-                result = append(result,command)
-                try:
-                    time.sleep(int(command[5:]))
-                except:
-                    cprint ("Invalid sleep time: %s; sleeping 2s" % command[5:],"yellow")
-                    time.sleep(2)
-            else:
-                # print ("Executing %s" % command)
-                newresult = sendCommand(command,query)
-                if newresult:
-                    # print ("Result: %s" % newresult)
-                    result = append(result,newresult)
-            time.sleep(query["deviceDelay"])
-        if result:
-            return result
+        if 'serialize' in query and query['serialize']:
+            exec_macro(commandFromSettings,query)
+        else:
+            eventList.add("MACRO",query["deviceDelay"],commandFromSettings,query)
+        return query['command']
     else:
         time.sleep(query["deviceDelay"])
         return False #- not a macro
+
+def exec_macro(commandFromSettings,query):
+    query['serialize'] = True;
+    expandedCommand = expandVariables(commandFromSettings[6:],query)
+    commandFromSettings = expandedCommand.strip()
+    for command in commandFromSettings.split():
+        # print ("Executing %s" % command)
+        if command == "sleep":
+            time.sleep(1)
+            cprint ("sleep 1", "cyan")
+            continue
+        if "(" in command:
+            paramstring= command[command.find("(")+1:command.find(")")]
+            command = command[:command.find("(")]
+            for param in paramstring.split(','):
+                pair = param.split('=')
+                query[pair[0]] = pair[1]
+                # print ("Setting %s to %s" % (pair[0], pair[1]))
+        elif "," in command:
+            try:
+                (actualCommand, repeatAmount) = command.split(',')
+                if actualCommand == "sleep":
+                    time.sleep(float(repeatAmount))
+                    cprint ("sleep %s" % repeatAmount,'cyan')
+                else:
+                    for x in range(0,int(repeatAmount)):
+                        result = sendCommand(actualCommand,query)
+                        if result == actualCommand:
+                            result = ''
+                        else:
+                            result = "= %s" % result
+                        cprint ("%s %s" % (actualCommand,result),"cyan")
+            except StandardError as e:
+                cprint ("Skipping malformed command: %s, %s" % (command,e),"yellow")
+            continue
+        if command.startswith("sleep"):
+            try:
+                time.sleep(int(command[5:]))
+                cprint("sleep %s",command[5:],'cyan')
+            except:
+                cprint ("Invalid sleep time: %s; sleeping 2s" % command[5:],"yellow")
+                time.sleep(2)
+        else:
+            # print ("Executing %s" % command)
+            result = sendCommand(command,query)
+            if result == command:
+                result = ''
+            else:
+                result = "= %s" % result
+            cprint ("%s %s" % (command,result),"cyan")
+        time.sleep(query["deviceDelay"])
 
 #- Wake On Lan
 def execute_wol(command,query):
