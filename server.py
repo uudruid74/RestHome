@@ -620,7 +620,7 @@ def readSettingsFile():
                 query["device"] = devname
                 macros.eventList.add("StartUp"+commandName,1,commandName,query)
 
-    return { "port": serverPort, "listen": listen_address, "threads": threads, "timeout": GlobalTimeout }
+    return { "port": serverPort, "listen": listen_address, "threads": MaxThreads, "timeout": GlobalTimeout }
 
 def SigUsr1(signum, frame):
     cprint ("\nReloading configuration ...","cyan")
