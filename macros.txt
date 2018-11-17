@@ -34,10 +34,13 @@ right value you may use an instruction such as:
             a million places.  If you prefer, you can set a device for
             a command using parameter syntax if you need to, and even
             set it to a parameter.  Likewise "RELAY $otherdevice" works
+    NOP     Do nothing at all.  This is useful when you want to use an on/off
+            command purely for the trigger, without any actual command.  This
+            will stop you from getting error messages.  Anything after the
+            NOP is guaranteed to be ignored, so you can also use this to
+            "comment out" a command.
 
-Any other "rvalue" should be either a real IR code or a command defined
-elsewhere.  You may define commands in either the command section, or using
-a special section.
+Any other "rvalue" should be an IR code created with "learnCommand"
 
 PARAMETERS: The MACRO lines can contain parameter expansions as well, so
 you can determine what code is excuted via URL query parameters.  You can

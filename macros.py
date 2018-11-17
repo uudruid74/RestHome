@@ -8,6 +8,7 @@ from termcolor import cprint
 import subprocess
 import json
 import threading
+import sys
 
 def append(a,b):
     if a.strip() == '':
@@ -41,7 +42,7 @@ class EventList(object):
         with self.lock:
             node.nextNode = self.begin
             #- insert into beginning
-            if self.begin == None or node.timestamp < node.nextNode:
+            if self.begin == None or node.timestamp < node.nextNode.timestamp:
                 #print "Insert at beginning"
                 self.begin = node
             else:
@@ -70,16 +71,12 @@ class EventList(object):
     def add(self,name,fire,command,params):
 #        print "add"
         with self.lock:
-            if name != "MACRO":
-                found = self.find(name)
-                if found:
-                    found.params = dict(found.params, **params)
-                    if found.command != command:
-                        cprint ("WARNING: Event %s overwrites old command: %s" % (name,found.command),"yellow")
-                        found.command = command
-                    return
-            found = EventNode(name,fire,command,params)
-            self.insert(found)
+            found = self.find(name)
+            if found:
+                cprint("Deleting old event: %s" % name,"yellow")
+                self.delete(found)
+            params['serialize'] = True
+            self.insert(EventNode(name,fire,command,params))
     def find(self,name):
 #        print "find"
         with self.lock:
@@ -109,6 +106,7 @@ eventList = EventList()
 
 #-
 #- TODO - allow $default(var), just like $status, only a param can override the value
+#-
 def expandVariables(commandString,query):
     statusVar = commandString.find("$status(")
     while statusVar > -1:
@@ -129,9 +127,14 @@ def expandVariables(commandString,query):
 def checkMacros(commandFromSettings,query):
     #print ("checkMacros %s" % commandFromSettings)
     if commandFromSettings.startswith("PRINT "):
-        return expandVariables(commandFromSettings[6:],query)
+        cprint (expandVariables(commandFromSettings[6:],query),"white")
+        return True
+    elif commandFromSettings == "NOP":
+        cprint ("%s=NOP" % query['command'],"cyan",end=' ')
+        return True
     elif commandFromSettings.startswith("SH "):
-        return shellCommand(expandVariables(commandFromSettings[3:],query))
+        shellCommand(expandVariables(commandFromSettings[3:],query))
+        return True
     elif commandFromSettings.startswith("SET "):
         return setStatus(commandFromSettings[4:],"1",query)
     elif commandFromSettings.startswith("INC "):
@@ -155,28 +158,27 @@ def checkMacros(commandFromSettings,query):
         if device == query['device']:
             cprint ("RELAY %s attempted to relay to itself" % query['command'],"yellow")
             return False
-        query['device'] = device
+        newquery = query.copy()
+        newquery['device'] = device
         #print "Relaying %s to %s" % (query['command'],device)
-        return sendCommand(query['command'],query)
+        return sendCommand(query['command'],newquery)
     elif commandFromSettings.startswith("MACRO "):
         if 'serialize' in query and query['serialize']:
             exec_macro(commandFromSettings,query)
         else:
-            eventList.add("MACRO",query["deviceDelay"],commandFromSettings,query)
+            eventList.add(query['command'],query["deviceDelay"],commandFromSettings,query)
         return query['command']
     else:
-        time.sleep(query["deviceDelay"])
         return False #- not a macro
 
 def exec_macro(commandFromSettings,query):
-    query['serialize'] = True;
     expandedCommand = expandVariables(commandFromSettings[6:],query)
     commandFromSettings = expandedCommand.strip()
     for command in commandFromSettings.split():
         # print ("Executing %s" % command)
         if command == "sleep":
+            cprint ("sleep,1", "cyan",end=' ')
             time.sleep(1)
-            cprint ("sleep 1", "cyan")
             continue
         if "(" in command:
             paramstring= command[command.find("(")+1:command.find(")")]
@@ -189,35 +191,29 @@ def exec_macro(commandFromSettings,query):
             try:
                 (actualCommand, repeatAmount) = command.split(',')
                 if actualCommand == "sleep":
+                    cprint ("sleep,%s" % repeatAmount,'cyan',end=' ')
                     time.sleep(float(repeatAmount))
-                    cprint ("sleep %s" % repeatAmount,'cyan')
                 else:
                     for x in range(0,int(repeatAmount)):
-                        result = sendCommand(actualCommand,query)
-                        if result == actualCommand:
-                            result = ''
-                        else:
-                            result = "= %s" % result
-                        cprint ("%s %s" % (actualCommand,result),"cyan")
+                        cprint (actualCommand,"cyan",end=' ')
+                        sendCommand(actualCommand,query)
+                        sys.stdout.flush()
             except StandardError as e:
-                cprint ("Skipping malformed command: %s, %s" % (command,e),"yellow")
+                cprint ("\nSkipping malformed command: %s, %s" % (command,e),"yellow")
             continue
         if command.startswith("sleep"):
+            amount = float(command[5:].strip())
             try:
-                time.sleep(int(command[5:]))
-                cprint("sleep %s",command[5:],'cyan')
-            except:
-                cprint ("Invalid sleep time: %s; sleeping 2s" % command[5:],"yellow")
+                cprint("sleep,%s" % amount,'cyan',end=' ')
+                time.sleep(amount)
+            except StandardError as e:
+                cprint ("\nInvalid sleep time: %s (%s); sleeping 2s" % (amount,e),"yellow")
                 time.sleep(2)
         else:
             # print ("Executing %s" % command)
+            cprint (command,"cyan",end=' ')
             result = sendCommand(command,query)
-            if result == command:
-                result = ''
-            else:
-                result = "= %s" % result
-            cprint ("%s %s" % (command,result),"cyan")
-        time.sleep(query["deviceDelay"])
+    sys.stdout.flush()
 
 #- Wake On Lan
 def execute_wol(command,query):
