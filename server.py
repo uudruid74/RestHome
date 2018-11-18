@@ -253,7 +253,7 @@ def sendCommand(commandName,params):
         if result:
             return result
 
-        newCommandName = ''
+        newCommandName = False
         if 'PRINT' not in commandName and 'MACRO' not in commandName:
             if commandName.endswith("on"):
                 newCommandName = commandName[:-2]
@@ -262,7 +262,6 @@ def sendCommand(commandName,params):
                 newCommandName = commandName[:-3]
                 setStatus(newCommandName, '0', params)
 
-        #print "Command Name: %s  New: %s" % (commandName, newCommandName)
         if settingsFile.has_option(serviceName, commandName):
             command = settingsFile.get(serviceName, commandName)
         elif settingsFile.has_option('Commands', commandName):
@@ -275,7 +274,6 @@ def sendCommand(commandName,params):
             command = commandName
 
         result = macros.checkMacros(command,params)
-        #print ("Macro Result: %s = %s" % (command,result))
         if result:
             return result
 
@@ -289,30 +287,30 @@ def sendCommand(commandName,params):
                 #print "Returned: %s" % r.text
                 return r.text
 
-        with device.lock:
-            cprint (command,"magenta")
-            try:
-                deviceKey = device.key
-                deviceIV = device.iv
+        if command != commandName:
+            with device.lock:
+                # cprint ("COMMAND: %s NAME: %s" % (command,commandName),"magenta")
+                try:
+                    deviceKey = device.key
+                    deviceIV = device.iv
 
-                decodedCommand = binascii.unhexlify(command)
-                AESEncryption = AES.new(str(deviceKey), AES.MODE_CBC, str(deviceIV))
-                encodedCommand = AESEncryption.encrypt(str(decodedCommand))
+                    decodedCommand = binascii.unhexlify(command)
+                    AESEncryption = AES.new(str(deviceKey), AES.MODE_CBC, str(deviceIV))
+                    encodedCommand = AESEncryption.encrypt(str(decodedCommand))
 
-                finalCommand = encodedCommand[0x04:]
-            except StandardError as e:
-                cprint("sendCommand: %s failed: %s" % (command,e),"yellow")
-                traceback.print_exc()
-                return False
-            try:
-                device.send_data(finalCommand)
-                time.sleep(params["deviceDelay"])
-            except Exception:
-                cprint ("Probably timed out..","yellow")
-                return False
-        return commandName
-    else:
-        return False
+                    finalCommand = encodedCommand[0x04:]
+                except StandardError as e:
+                    cprint("sendCommand: %s failed: %s" % (command,e),"yellow")
+                    traceback.print_exc()
+                    return False
+                try:
+                    device.send_data(finalCommand)
+                    time.sleep(params["deviceDelay"])
+                except Exception:
+                    cprint ("Probably timed out..","yellow")
+                    return False
+            return commandName
+        return newCommandName
 
 def learnCommand(commandName, params):
     deviceName = params["device"]

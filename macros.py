@@ -154,7 +154,7 @@ def checkMacros(commandFromSettings,query):
     elif commandFromSettings.startswith("CLEAR "):
         return setStatus(commandFromSettings[6:],"0",query)
     elif commandFromSettings.startswith("TOGGLE "):
-        toggleStatus(commandFromSettings[7:],query)
+        return toggleStatus(commandFromSettings[7:],query)
     elif commandFromSettings.startswith("RELAY "):
         device = commandFromSettings[6:]
         if device == query['device']:
@@ -179,8 +179,10 @@ def exec_macro(commandFromSettings,query):
     commandFromSettings = expandedCommand.strip()
     for command in commandFromSettings.split():
         # print ("Executing %s" % command)
+        cprint (command,"cyan",end=' ')
+        sys.stdout.flush()
+
         if command == "sleep":
-            cprint ("sleep,1", "cyan",end=' ')
             time.sleep(1)
             continue
         if "(" in command:
@@ -195,33 +197,29 @@ def exec_macro(commandFromSettings,query):
             try:
                 (actualCommand, repeatAmount) = command.split(',')
                 if actualCommand == "sleep":
-                    cprint ("sleep,%s" % repeatAmount,'cyan',end=' ')
                     time.sleep(float(repeatAmount))
                 else:
                     for x in range(0,int(repeatAmount)):
-                        cprint (actualCommand,"cyan",end=' ')
+                        cprint (actualCommand,"green",end=' ')
                         sendCommand(actualCommand,query)
-                        sys.stdout.flush()
             except StandardError as e:
                 cprint ("\nSkipping malformed command: %s, %s" % (command,e),"yellow")
             continue
         if command.startswith("sleep"):
             amount = float(command[5:].strip())
             try:
-                cprint("sleep,%s" % amount,'cyan',end=' ')
                 time.sleep(amount)
             except StandardError as e:
                 cprint ("\nInvalid sleep time: %s (%s); sleeping 2s" % (amount,e),"yellow")
                 time.sleep(2)
         else:
-            # print ("Executing %s" % command)
-            cprint (command,"cyan",end=' ')
             result = sendCommand(command,query)
     sys.stdout.flush()
 
 #- Wake On Lan
 def execute_wol(command,query):
     section = "WOL "+command
+    cprint (section,"green")
     try:
         port = None
         mac = settingsFile.get(section,"mac")
@@ -236,6 +234,7 @@ def execute_wol(command,query):
 #- Test a variable for true/false
 def execute_test(command,query):
     section = "TEST "+command
+    cprint (section,"green")
     try:
         valueToTest = settingsFile.get(section,"value")
         value = getStatus(valueToTest,query)
@@ -252,6 +251,7 @@ def execute_test(command,query):
 
 #- Execute shell command, short MACRO version
 def shellCommand(commandString):
+    cprint("SH %s" % commandString, "green")
     (command,sep,parameters) = commandString.partition(' ')
     execCommand = [command,parameters]
     try:
@@ -264,9 +264,8 @@ def shellCommand(commandString):
 
 #- Execute shell command, section version, with store ability
 def execute_shell(command,query):
-    # print ("Run Subshell")
-
     section = "SHELL " + command
+    cprint (section,"green")
     parameters = None
     if settingsFile.has_option(section,"parameters"):
         parameters = expandVariables(settingsFile.get(section,"parameters"),query)
@@ -298,8 +297,8 @@ def ping(host):
     return subprocess.call(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE) == 0
 
 def execute_check(command,query):
-#    print ("Execute Check")
     section = "CHECK "+command
+    cprint (section,"green")
     try:
         host = settingsFile.get(section,"host")
         if ping(host):
@@ -315,8 +314,9 @@ def execute_check(command,query):
 
 def execute_radio(command,query):
     section = "RADIO " + command
+    cprint (section,"green")
+    status = getStatus(command,query)
     try:
-        status = getStatus(command,query)
         newstatus = query["button"]
         if (status == newstatus):
             cprint ("RADIO button already at state = %s" % status,"cyan")
@@ -336,11 +336,10 @@ def execute_radio(command,query):
             setStatus(command,newstatus,query)
     except StandardError as e:
         cprint ("RADIO Failed: %s" % e,"yellow")
-    return getStatus(command,query)
+    return status
 
 def execute_timer(command,query):
     section = "TIMER "+command
-#    print ("Execute TIMER: " + command)
     try:
         command = settingsFile.get(section,"command");
         delay = 0
@@ -350,6 +349,7 @@ def execute_timer(command,query):
             delay += int(settingsFile.get(section,"minutes")) * 60
         if settingsFile.has_option(section,"hours"):
             delay += int(settingsFile.get(section,"hours")) * 3600
+        cprint ("%s created, delay=%ss" % (section,delay),"green")
         eventList.add(command,delay,command,query)
         return command
     except StandardError as e:
@@ -358,8 +358,8 @@ def execute_timer(command,query):
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query):
-    #print ("LOGIC %s" % command)
     section = "LOGIC "+command
+    cprint (section,"green")
     newcommand = None
     try:
         if settingsFile.has_option(section,"test"):
