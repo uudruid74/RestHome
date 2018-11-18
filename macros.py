@@ -140,7 +140,8 @@ def checkMacros(commandFromSettings,query):
     elif commandFromSettings.startswith("INC "):
         variable = int(getStatus(commandFromSettings[4:],query))
         variable += 1
-        return setStatus(commandFromSettings[4:],variable)
+        setStatus(commandFromSettings[4:],str(variable),query)
+        return str(variable)
     elif commandFromSettings.startswith("CANCEL "):
         variable = int(getStatus(commandFromSettings[7:],query))
         eventList.delete(variable)
@@ -148,11 +149,12 @@ def checkMacros(commandFromSettings,query):
     elif commandFromSettings.startswith("DEC "):
         variable = int(getStatus(commandFromSettings[4:],query))
         variable -= 1
-        return setStatus(commandFromSettings[4:],variable)
+        setStatus(commandFromSettings[4:],str(variable),query)
+        return str(variable)
     elif commandFromSettings.startswith("CLEAR "):
         return setStatus(commandFromSettings[6:],"0",query)
     elif commandFromSettings.startswith("TOGGLE "):
-        return toggleStatus(commandFromSettings[7:],query)
+        toggleStatus(commandFromSettings[7:],query)
     elif commandFromSettings.startswith("RELAY "):
         device = commandFromSettings[6:]
         if device == query['device']:
@@ -173,6 +175,7 @@ def checkMacros(commandFromSettings,query):
 
 def exec_macro(commandFromSettings,query):
     expandedCommand = expandVariables(commandFromSettings[6:],query)
+    #cprint("expandedCommand = %s" % expandedCommand, "magenta")
     commandFromSettings = expandedCommand.strip()
     for command in commandFromSettings.split():
         # print ("Executing %s" % command)
@@ -183,6 +186,7 @@ def exec_macro(commandFromSettings,query):
         if "(" in command:
             paramstring= command[command.find("(")+1:command.find(")")]
             command = command[:command.find("(")]
+            #cprint("command = %s, param = %s" % (command,paramstring), "magenta")
             for param in paramstring.split(','):
                 pair = param.split('=')
                 query[pair[0]] = pair[1]
@@ -314,7 +318,6 @@ def execute_radio(command,query):
     try:
         status = getStatus(command,query)
         newstatus = query["button"]
-        mult = 1.0
         if (status == newstatus):
             cprint ("RADIO button already at state = %s" % status,"cyan")
             return status
@@ -322,16 +325,18 @@ def execute_radio(command,query):
             off = "button" + status + "off"
             if settingsFile.has_option(section,off):
                 offCommand = settingsFile.get(section,off)
-                eventList.add(command+"off",ceiling(query['deviceDelay']),query)
-                mult = 2.0
+                if offCommand:
+                    sendCommand(offCommand,query)
+                    time.sleep(query["deviceDelay"])
             on = "button" + newstatus + "on"
             if settingsFile.has_option(section,on):
                 onCommand = settingsFile.get(section,on)
-                eventList.add(command+"on",ceiling(query['deviceDelay']*mult),onCommand,query)
-            return setStatus(command,newstatus,query)
+                if onCommand:
+                    sendCommand(onCommand,query)
+            setStatus(command,newstatus,query)
     except StandardError as e:
         cprint ("RADIO Failed: %s" % e,"yellow")
-    return False
+    return getStatus(command,query)
 
 def execute_timer(command,query):
     section = "TIMER "+command

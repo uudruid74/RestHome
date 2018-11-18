@@ -272,7 +272,7 @@ def sendCommand(commandName,params):
         elif settingsFile.has_option('Commands', newCommandName):
             command = settingsFile.get('Commands', newCommandName)
         else:
-            command = commandName   #- hack for rawcommand from Timers
+            command = commandName
 
         result = macros.checkMacros(command,params)
         #print ("Macro Result: %s = %s" % (command,result))
@@ -290,6 +290,7 @@ def sendCommand(commandName,params):
                 return r.text
 
         with device.lock:
+            cprint (command,"magenta")
             try:
                 deviceKey = device.key
                 deviceIV = device.iv
@@ -390,12 +391,12 @@ def setStatus(commandName, status, params):
             else:
                 try:
                     value = getStatus(commandName,params)
-                    print("TEST returned %s" % value)
+                    #print("TEST returned %s" % value)
                     if value == "1":
                         rawcommand = settingsFile.get(section,"on")
                     else:
                         rawcommand = settingsFile.get(section,"off")
-                    print ("Raw %s: %s" % (commandName,rawcommand))
+                    #print ("Raw %s: %s" % (commandName,rawcommand))
                     macros.eventList.add("TRIGGER %s" % commandName,1,rawcommand,params)
                 except StandardError as e:
                     cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
@@ -436,10 +437,12 @@ def toggleStatus(commandName, params):
     # print ("Status = %s" % status)
     try:
         if status == "0":
-            return setStatus(commandName,"1",params)
+            setStatus(commandName,"1",params)
+        else:
+            setStatus(commandName,"0",params)
     except:
         pass
-    return setStatus(commandName,"0",params)
+    return getStatus(commandName,params)
 
 def getSensor(sensorName,params):
     deviceName = params["device"]

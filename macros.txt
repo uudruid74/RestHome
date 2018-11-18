@@ -16,9 +16,11 @@ Virtual commands are defined like normal, in either the global or per-device
 "Commands" section.  List the virtual command name as the lvalue and as the
 right value you may use an instruction such as:
     PRINT   Prints the string, which may contain URL parameters
-    SET     And a single variable to set to 1
-    CLEAR   And a single variable to set to 0
-    TOGGLE  And a single variable to set to toggle
+    SET     And a single variable to set to 1, reports old value
+    CLEAR   And a single variable to set to 0, reports old value
+    INC     And a single variable to increment, reports new value
+    DEC     And a single variable to increment, reports new value
+    TOGGLE  And a single variable to set to toggle, reports new value
     MACRO   Followed by a list of commands.  Any command may be followed by
             a comma and a repeat count.  You may also use the virtual "sleep"
             commands (sleep, sleep2, sleep3, etc) to pause for a set number
@@ -28,6 +30,7 @@ right value you may use an instruction such as:
     SH      Short shell command to run, $param substitution is done
             WARNING!  $parameters are passed directly to the OS!  However,
             shell expansions and such are NOT done.  There is no shell!
+            However, see the SHELL virtual command below!
     CANCEL  And a single variable, the timer to cancel
     RELAY   followed by a device to relay the command to.  This is only
             here so that you don't have to use command(device=xxxx) in
@@ -122,7 +125,8 @@ The following keywords are defined
                     it will run the command through a complete subshell.  This
                     is a security hazard!
         store       You can set this to a variable name and the result of the
-                    command's execution will be stored in the named variable
+                    command's execution will be stored in the named variable.
+                    It stores the commands stdout, not exit code!
 
     TIMER   Used to perform another command in the future.  Just set seconds,
             minutes, and/or hours (if you name multiple, they are added - so
@@ -136,6 +140,10 @@ The following keywords are defined
             mode is currently active is saved.  When you execite this command
             you pass in the variable "button" (in parenthesis if a MACRO, or
             in the URL as a parameter) set to the new button you are "pushing"
+            You can increment a list of options by using INC to increment a
+            status variable, and then use a SET section to trigger the new
+            RADIO option.  Make the last button a CLEAR command to restart!
+
             The parameters are:
         button0off  Button 0 is the first/default button.  The off command for
                     the old button state is sent before the new button is
@@ -144,7 +152,7 @@ The following keywords are defined
         button1on   Each button is just the command to execute when the button
                     is pushed.  It will not be sent twice if the same button
                     is pushed twice.
-        button1off  Off command are optional.
+        button1off  Off commands are optional.
 
 The LOGIC Section is the ultimate / universal conditional.  It can take many
 forms, so we'll devote a bit more area to this one:
