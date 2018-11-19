@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3.4
 import datetime
 import threading
 import broadlink, configparser
@@ -17,8 +17,8 @@ import re
 import collections
 import platform
 import pdb
-import SocketServer
-import BaseHTTPServer
+import socketserver
+import http.server
 from termcolor import cprint
 from devices import devices, DeviceByName
 from os import path
@@ -38,7 +38,7 @@ class Thread(threading.Thread):
         time.sleep(self.i/THROTTLE)
         self.start()
     def run(self):
-        httpd = BaseHTTPServer.HTTPServer(self.addr, Handler, False)
+        httpd = http.server.HTTPServer(self.addr, Handler, False)
 
         # Prevent the HTTP server from re-binding every handler.
         # https://stackoverflow.com/questions/46210672/
@@ -55,7 +55,7 @@ class Thread(threading.Thread):
             httpd.timeout = timer
             httpd.handle_request()
 
-class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
+class Handler(http.server.BaseHTTPRequestHandler):
     Parameters = collections.defaultdict(lambda : ' ')
     def _set_headers(self):
         self.send_response(200)
@@ -79,10 +79,11 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_POST(self):
         password = ''
         try:
-            content_len = int(self.headers.getheader('content-length', 0))
-            self.Parameters.update(json.loads(self.rfile.read(content_len)))
+            content_len = int(self.headers.get('content-length', 0))
+            self.Parameters.update(json.loads(self.rfile.read(content_len).decode("utf-8")))
             password = self.Parameters['password'];
         except:
+            traceback.print_exc()
             pass
         try:
             if GlobalPassword and GlobalPassword == password:
@@ -95,14 +96,14 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def password_required(self):
         response = "POST Password required from %s" % self.client_address[0]
-        self.wfile.write('''{ "error": "%s" }''' % response)
+        self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
         cprint (response,"red")
         self.close_connection = 1
         return False
 
     def access_denied(self):
         response = "Client %s is not allowed to use GET!" % self.client_address[0]
-        self.wfile.write('''{ "error": "%s" }''' % response)
+        self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
         cprint (response,"red")
         self.close_connection = 1
         return False
@@ -115,7 +116,7 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
         if '?' in self.path:
             (self.path,query) = self.path.split('?')
             params = re.split('[&=]+',query)
-            for index in xrange(0,len(params),2):
+            for index in range(0,len(params),2):
                 self.Parameters[params[index]] = params[index+1]
         paths = re.split('[//=]+',self.path)
         if 'learnCommand' in self.path:
@@ -222,13 +223,13 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
         else:
             response = "Failed"
         if "Failed" in response or "error" in response:
-            self.wfile.write('''{ "error": "%s" }''' % response)
+            self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
         elif response.startswith('{'):
-            self.wfile.write(response)
+            self.wfile.write(bytes(response,'utf-8'))
         else:
-            self.wfile.write('''{ "ok": "%s" }''' % response)
+            self.wfile.write(bytes('''{ "ok": "%s" }''' % response,'utf-8'))
         cprint ("\t"+response,"white")
-        print ""
+        print("")
 
 def sendCommand(commandName,params):
     deviceName = params["device"]
@@ -289,23 +290,17 @@ def sendCommand(commandName,params):
 
         if command != commandName:
             with device.lock:
-                # cprint ("COMMAND: %s NAME: %s" % (command,commandName),"magenta")
                 try:
-                    deviceKey = device.key
-                    deviceIV = device.iv
-
                     decodedCommand = binascii.unhexlify(command)
-                    AESEncryption = AES.new(str(deviceKey), AES.MODE_CBC, str(deviceIV))
-                    encodedCommand = AESEncryption.encrypt(str(decodedCommand))
-
+                    AESEncryption = AES.new(device.key, AES.MODE_CBC, bytes(device.iv))
+                    encodedCommand = AESEncryption.encrypt(bytes(decodedCommand))
                     finalCommand = encodedCommand[0x04:]
-                except StandardError as e:
+                except Exception as e:
                     cprint("sendCommand: %s failed: %s" % (command,e),"yellow")
-                    traceback.print_exc()
                     return False
                 try:
                     device.send_data(finalCommand)
-                    time.sleep(params["deviceDelay"])
+                    time.sleep(settings.Dev[deviceName,"Delay"])
                 except Exception:
                     cprint ("Probably timed out..","yellow")
                     return False
@@ -330,12 +325,14 @@ def learnCommand(commandName, params):
     with device.lock:
         cprint ("Waiting %d seconds to capture command" % GlobalTimeout,"magenta")
 
-        deviceKey = device.key
-        deviceIV = device.iv
-
         device.enter_learning()
-        time.sleep(GlobalTimeout)
-        LearnedCommand = device.check_data()
+        #time.sleep(GlobalTimeout)
+        start = time.time()
+        sleeptime = max(settings.Dev[deviceName,"Delay"],1.0)
+        LearnedCommand = None
+        while LearnedCommand is None and time.time() - start < GlobalTimeout:
+            time.sleep(sleeptime)
+            LearnedCommand = device.check_data()
 
         if LearnedCommand is None:
             cprint('Command not received',"yellow")
@@ -344,20 +341,21 @@ def learnCommand(commandName, params):
         AdditionalData = bytearray([0x00, 0x00, 0x00, 0x00])
         finalCommand = AdditionalData + LearnedCommand
 
-        AESEncryption = AES.new(str(deviceKey), AES.MODE_CBC, str(deviceIV))
-        decodedCommand = binascii.hexlify(AESEncryption.decrypt(str(finalCommand)))
+        AESEncryption = AES.new(device.key, AES.MODE_CBC, bytes(device.iv))
+        decodedCommand = binascii.hexlify(AESEncryption.decrypt(bytes(finalCommand)))
 
         backupSettings()
         try:
             broadlinkControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
             if not settingsFile.has_section(sectionName):
                 settingsFile.add_section(sectionName)
-            settingsFile.set(sectionName, commandName, decodedCommand)
+            settingsFile.set(sectionName, commandName, str(decodedCommand,'utf8'))
             settingsFile.write(broadlinkControlIniFile)
             broadlinkControlIniFile.close()
             return commandName
-        except StandardError as e:
+        except Exception as e:
             cprint("Error writing settings file: %s" % e,"yellow")
+            traceback.print_exc()
             restoreSettings()
     return False
 
@@ -377,14 +375,13 @@ def setStatus(commandName, status, params):
         if not settingsFile.has_section(sectionName):
             settingsFile.add_section(sectionName)
         broadlinkControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
-        settingsFile.set(sectionName, commandName, status)
+        settingsFile.set(sectionName, commandName, str(status))
         settingsFile.write(broadlinkControlIniFile)
         broadlinkControlIniFile.close()
         if settingsFile.has_section("SET "+commandName):
             section = "SET " + commandName
             if settingsFile.has_option(section, "trigger"):
                 rawcommand = settingsFile.get(section, "trigger")
-                print ("Trigger %s = %s" % (commandName,rawcommand))
                 macros.eventList.add("TRIGGER %s" % commandName,1,rawcommand,params)
             else:
                 try:
@@ -396,15 +393,16 @@ def setStatus(commandName, status, params):
                         rawcommand = settingsFile.get(section,"off")
                     #print ("Raw %s: %s" % (commandName,rawcommand))
                     macros.eventList.add("TRIGGER %s" % commandName,1,rawcommand,params)
-                except StandardError as e:
+                except Exception as e:
                     cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
                     cprint ("ERROR was %s" % e,"yellow")
         elif settingsFile.has_section("LOGIC "+commandName):
             macros.eventList.add("LOGIC %s" % commandName,1,commandName,params)
             cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
         return oldvalue
-    except StandardError as e:
+    except Exception as e:
         cprint ("Error writing settings file: %s" % e,"yellow")
+        traceback.print_exc()
         restoreSettings()
         return False
 
@@ -457,12 +455,12 @@ def getSensor(sensorName,params):
             if "RM" in device.type.upper() and "temp" in sensorName:
                 temperature = device.check_temperature()
                 if temperature:
-                    time.sleep(params["deviceDelay"])
+                    time.sleep(settings.Dev[deviceName,"Delay"])
                     return temperature
             if "A1" in device.type.upper():
                 result = device.check_sensors()
                 if result:
-                    time.sleep(params["deviceDelay"])
+                    time.sleep(settings.Dev[deviceName,"Delay"])
                     return result[sensorName]
         except:
             pass    #- Ignore errors and just return false
@@ -589,10 +587,10 @@ def readSettingsFile():
                 settingsFile.set(device.hostname,'Timeout',str(device.timeout))
                 settingsFile.set(device.hostname,'Type',device.type.upper())
                 device.auth()
-                print ("%s: Found %s on %s (%s) type: %s" % (device.hostname, device.type, device.host, hexmac, hex(device.devtype)))
+                print(("%s: Found %s on %s (%s) type: %s" % (device.hostname, device.type, device.host, hexmac, hex(device.devtype))))
             settingsFile.write(broadlinkControlIniFile)
             broadlinkControlIniFile.close()
-        except StandardError as e:
+        except Exception as e:
             cprint ("Error writing settings file: %s" % e,"yellow")
             restoreSettings()
     if settings.DevList:
@@ -619,7 +617,7 @@ def readSettingsFile():
             device.timeout = Dev[devname,'Timeout']
             device.Type = Dev[devname,'Type']
             device.lock = threading.RLock()
-            print "Setting %s to Type %s" % (devname,device.Type)
+            print("Setting %s to Type %s" % (devname,device.Type))
             if not devname in DeviceByName:
                 device.hostname = devname
                 if hasattr(device, 'auth'):

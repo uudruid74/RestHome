@@ -19,24 +19,24 @@ def makeMagicPacket(macAddress):
                                     #create the magic packet from MAC address
 
 def sendPacket(packet, destIP, destPort):
-    print ("sendPacket %s:%s" % (destIP,destPort))
+    print(("sendPacket %s:%s" % (destIP,destPort)))
     # Create the socket connection and send the packet
     s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.sendto(packet,(destIP,destPort))
     s.close()
 
 def wake(macAddress, destIP, destPort=9):
-    print ("Waking %s at %s" % (destIP, macAddress))
+    print(("Waking %s at %s" % (destIP, macAddress)))
     macAddressStr = str(macAddress)
     if destPort == None:
         destPort = 9
     try:
         packet = makeMagicPacket(macAddressStr)
         sendPacket(packet, destIP, destPort)
-        print 'Packet successfully sent to', macAddress
+        print('Packet successfully sent to', macAddress)
         return "Sent"
-    except StandardError as e:
-        print ("WOL Failed: %s" % e)
+    except Exception as e:
+        print(("WOL Failed: %s" % e))
         return False
 
 

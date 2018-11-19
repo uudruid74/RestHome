@@ -202,14 +202,14 @@ def exec_macro(commandFromSettings,query):
                     for x in range(0,int(repeatAmount)):
                         cprint (actualCommand,"green",end=' ')
                         sendCommand(actualCommand,query)
-            except StandardError as e:
+            except Exception as e:
                 cprint ("\nSkipping malformed command: %s, %s" % (command,e),"yellow")
             continue
         if command.startswith("sleep"):
             amount = float(command[5:].strip())
             try:
                 time.sleep(amount)
-            except StandardError as e:
+            except Exception as e:
                 cprint ("\nInvalid sleep time: %s (%s); sleeping 2s" % (amount,e),"yellow")
                 time.sleep(2)
         else:
@@ -227,7 +227,7 @@ def execute_wol(command,query):
         if settingsFile.has_option(section,"port"):
             port = settingsFile.get(section,"port")
         return wol.wake(mac,ip,port)
-    except StandardError as e:
+    except Exception as e:
         cprint ("WOL Failed: %s" % e,"yellow")
     return False
 
@@ -245,7 +245,7 @@ def execute_test(command,query):
             rawcommand = settingsFile.get(section,"off")
         # print ("Raw: %s" % rawcommand)
         return sendCommand(rawcommand,query)
-    except StandardError as e:
+    except Exception as e:
         cprint ("TEST Failed: %s" % e,"yellow")
     return False
 
@@ -308,7 +308,7 @@ def execute_check(command,query):
         # print ("Command will be %s" % rawcommand)
         result = sendCommand(rawcommand,query)
         return result
-    except StandardError as e:
+    except Exception as e:
         cprint ("CHECK Failed: %s" % e,"yellow")
     return False
 
@@ -334,7 +334,7 @@ def execute_radio(command,query):
                 if onCommand:
                     sendCommand(onCommand,query)
             setStatus(command,newstatus,query)
-    except StandardError as e:
+    except Exception as e:
         cprint ("RADIO Failed: %s" % e,"yellow")
     return status
 
@@ -352,7 +352,7 @@ def execute_timer(command,query):
         cprint ("%s created, delay=%ss" % (section,delay),"green")
         eventList.add(command,delay,command,query)
         return command
-    except StandardError as e:
+    except Exception as e:
         cprint ("TIMER Failed: %s" % e,"yellow")
     return False
 
@@ -411,13 +411,13 @@ def execute_logicnode(command,query):
                 return False
         else:
             return sendCommand(newcommand,query)
-    except StandardError as e:
+    except Exception as e:
         # print ("Exception: %s" % e)
         try:
             if settingsFile.has_option(section,"error"):
                 newcommand = settingsFile.get(section,"error")
             return sendCommand(newcommand,query)
-        except StandardError as e:
+        except Exception as e:
             cprint ("LOGIC Failed: %s" % e,"yellow")
         return False
 
