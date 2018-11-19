@@ -3,7 +3,7 @@ Broadlink HTTP server/proxy with REST API
 Supported devices: RM/RM2/RM Pro/RM3/BlackBean/A1
 -------------------------------------------------
 
-UPDATE: Now multi-threaded !!!
+PYTHON 3.x READY and 2.x is no longer supported!  Fully multi-threaded!  Learns commands instantly!
 
 Uses [python-broadlink](https://github.com/mjg59/python-broadlink)
 
