@@ -369,7 +369,7 @@ def setStatus(commandName, status, params):
     backupSettings()
     oldvalue = getStatus(commandName,params)
     if oldvalue == status:
-        cprint ("Value of %s not changed: %s" % (commandName, status), "cyan")
+        cprint ("Value of %s not changed: %s" % (commandName, status), "green")
         return oldvalue
     try:
         if not settingsFile.has_section(sectionName):
