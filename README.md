@@ -159,4 +159,5 @@ Before, this would fail, but you could get a timeout waiting on a ton
 of commands.
 
 **TODO: REWRITE ALL DOCUMENTATION**
+**BUG:  Should pending events be saved when interrupting the server?
 

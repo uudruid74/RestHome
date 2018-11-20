@@ -117,7 +117,7 @@ def expandVariables(commandString,query):
         varname = commandString[statusVar+8:endVar]
         varvalue = getStatus(varname,query)
         commandString = commandString.replace(commandString[statusVar:endVar+1],varvalue)
-#        print ("%s = %s" % (varname,varvalue))
+#        print ("%s = %s device = %s" % (varname,varvalue,query['device']))
 #        print ("new: %s" % commandString)
         statusVar = commandString.find("$status(")
     firstPass = commandString
@@ -130,7 +130,7 @@ def checkMacros(commandFromSettings,query):
         cprint (expandVariables(commandFromSettings[6:],query),"white")
         return True
     elif commandFromSettings == "NOP":
-        cprint ("%s=NOP" % query['command'],"cyan",end=' ')
+        #cprint ("%s=NOP" % query['command'],"cyan",end=' ')
         return True
     elif commandFromSettings.startswith("SH "):
         shellCommand(expandVariables(commandFromSettings[3:],query))
@@ -175,9 +175,11 @@ def checkMacros(commandFromSettings,query):
 
 def exec_macro(commandFromSettings,query):
     expandedCommand = expandVariables(commandFromSettings[6:],query)
+
     #cprint("expandedCommand = %s" % expandedCommand, "magenta")
     commandFromSettings = expandedCommand.strip()
     for command in commandFromSettings.split():
+        newquery = query.copy()
         # print ("Executing %s" % command)
         cprint (command,"cyan",end=' ')
         sys.stdout.flush()
@@ -191,7 +193,7 @@ def exec_macro(commandFromSettings,query):
             #cprint("command = %s, param = %s" % (command,paramstring), "magenta")
             for param in paramstring.split(','):
                 pair = param.split('=')
-                query[pair[0]] = pair[1]
+                newquery[pair[0]] = pair[1]
                 # print ("Setting %s to %s" % (pair[0], pair[1]))
         elif "," in command:
             try:
@@ -214,7 +216,7 @@ def exec_macro(commandFromSettings,query):
                 cprint ("\nInvalid sleep time: %s (%s); sleeping 2s" % (amount,e),"yellow")
                 time.sleep(2)
         else:
-            result = sendCommand(command,query)
+            result = sendCommand(command,newquery)
     sys.stdout.flush()
 
 #- Wake On Lan

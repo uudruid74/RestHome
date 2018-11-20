@@ -83,7 +83,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.Parameters.update(json.loads(self.rfile.read(content_len).decode("utf-8")))
             password = self.Parameters['password'];
         except:
-            traceback.print_exc()
+            #traceback.print_exc()
             pass
         try:
             if GlobalPassword and GlobalPassword == password:
