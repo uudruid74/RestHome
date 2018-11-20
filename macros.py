@@ -117,8 +117,8 @@ def expandVariables(commandString,query):
         varname = commandString[statusVar+8:endVar]
         varvalue = getStatus(varname,query)
         commandString = commandString.replace(commandString[statusVar:endVar+1],varvalue)
-        #print "%s = %s" % (varname,varvalue)
-        #print "new: %s" % commandString
+#        print ("%s = %s" % (varname,varvalue))
+#        print ("new: %s" % commandString)
         statusVar = commandString.find("$status(")
     firstPass = commandString
     secondPass = string.Template(firstPass).substitute(query)
@@ -201,6 +201,7 @@ def exec_macro(commandFromSettings,query):
                 else:
                     for x in range(0,int(repeatAmount)):
                         cprint (actualCommand,"green",end=' ')
+                        sys.stdout.flush()
                         sendCommand(actualCommand,query)
             except Exception as e:
                 cprint ("\nSkipping malformed command: %s, %s" % (command,e),"yellow")
@@ -279,11 +280,11 @@ def execute_shell(command,query):
     shell = False
     try:
         if settingsFile.has_option(section,"shell") and settingsFile.get(section,"shell")!="False":
-            retval = subprocess.check_output(execCommand).strip()
+            retval = subprocess.check_output(execCommand)
         else:
-            retval = subprocess.check_output(execCommand,shell=shell).strip()
+            retval = subprocess.check_output(execCommand,shell=shell)
         if settingsFile.has_option(section,"store"):
-            setStatus(settingsFile.get(section,"store"),retval,query)
+            setStatus(settingsFile.get(section,"store"),str(retval,'utf8').strip(),query)
     except subprocess.CalledProcessError as e:
         retval = "Fail: %d; %s" % (e.returncode,e.output)
     if len(retval) < 1:
