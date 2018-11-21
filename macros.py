@@ -49,7 +49,7 @@ class EventList(object):
             #- insert into middle
                 #print "Insert in middle"
                 while node.nextNode.nextNode != None:
-                    if node.timeStamp >= node.nextNode.timestamp:
+                    if node.timestamp >= node.nextNode.timestamp:
                         node.nextNode = node.nextNode.nextNode
                     else:
                         node.nextNode = node
