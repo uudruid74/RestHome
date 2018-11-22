@@ -225,10 +225,10 @@ def execute_wol(command,query):
     cprint (section,"green")
     try:
         port = None
-        mac = settingsFile.get(section,"mac")
-        ip = settingsFile.get(section,"ip")
+        mac = expandVariables(settingsFile.get(section,"mac"),query)
+        ip = expandVariables(settingsFile.get(section,"ip"),query)
         if settingsFile.has_option(section,"port"):
-            port = settingsFile.get(section,"port")
+            port = expandVariables(settingsFile.get(section,"port"),query)
         return wol.wake(mac,ip,port)
     except Exception as e:
         cprint ("WOL Failed: %s" % e,"yellow")
@@ -239,7 +239,7 @@ def execute_test(command,query):
     section = "TEST "+command
     cprint (section,"green")
     try:
-        valueToTest = settingsFile.get(section,"value")
+        valueToTest = expandVariables(settingsFile.get(section,"value"),query)
         value = getStatus(valueToTest,query)
         #print("TEST returned %s" % value)
         if value == "1":
@@ -286,7 +286,7 @@ def execute_shell(command,query):
         else:
             retval = subprocess.check_output(execCommand,shell=shell)
         if settingsFile.has_option(section,"store"):
-            setStatus(settingsFile.get(section,"store"),str(retval,'utf8').strip(),query)
+            setStatus(expandVariables(settingsFile.get(section,"store"),query),str(retval,'utf8').strip(),query)
     except subprocess.CalledProcessError as e:
         retval = "Fail: %d; %s" % (e.returncode,e.output)
     if len(retval) < 1:
@@ -303,7 +303,7 @@ def execute_check(command,query):
     section = "CHECK "+command
     cprint (section,"green")
     try:
-        host = settingsFile.get(section,"host")
+        host = expandVariables(settingsFile.get(section,"host"),query)
         if ping(host):
             rawcommand = settingsFile.get(section,"on")
         else:
@@ -344,14 +344,14 @@ def execute_radio(command,query):
 def execute_timer(command,query):
     section = "TIMER "+command
     try:
-        command = settingsFile.get(section,"command");
+        command = expandVariables(settingsFile.get(section,"command"),query)
         delay = 0
         if settingsFile.has_option(section,"seconds"):
-            delay += int(settingsFile.get(section,"seconds"))
+            delay += int(expandVariables(settingsFile.get(section,"seconds"),query))
         if settingsFile.has_option(section,"minutes"):
-            delay += int(settingsFile.get(section,"minutes")) * 60
+            delay += int(expandVariables(settingsFile.get(section,"minutes"),query)) * 60
         if settingsFile.has_option(section,"hours"):
-            delay += int(settingsFile.get(section,"hours")) * 3600
+            delay += int(expandVariables(settingsFile.get(section,"hours"),query)) * 3600
         cprint ("%s created, delay=%ss" % (section,delay),"green")
         eventList.add(command,delay,command,query)
         return command
@@ -366,24 +366,24 @@ def execute_logicnode(command,query):
     newcommand = None
     try:
         if settingsFile.has_option(section,"test"):
-            valueToTest = settingsFile.get(section,"test")
+            valueToTest = expandVariables(settingsFile.get(section,"test"),query)
             value = getStatus(valueToTest,query)
             # print ("test = %s = %s" % (valueToTest,value))
         else:
             return False    #- test value required
         #- Try direct result
         if settingsFile.has_option(section,str(value)):
-            newcommand = settingsFile.get(section,value)
+            newcommand = expandVariables(settingsFile.get(section,value),query)
         elif value.isnumeric():
             if value == "1" and settingsFile.has_option(section,"on"):
-                newcommand = settingsFile.get(section,"on")
+                newcommand = expandVariables(settingsFile.get(section,"on"),query)
                 return sendCommand(newcommand,query)
             elif value == "0" and settingsFile.has_option(section,"off"):
-                newcommand = settingsFile.get(section, "off")
+                newcommand = expandVariables(settingsFile.get(section, "off"),query)
                 return sendCommand(newcommand,query)
             value = float(value)
             if settingsFile.has_option(section,"compare"):
-                compareVar = settingsFile.get(section,"compare")
+                compareVar = expandVariables(settingsFile.get(section,"compare"),query)
                 #print ("%s = %s" % (compareVar,getStatus(compareVar,query)))
                 compare = float(getStatus(compareVar,query))
                 #print ("compare = %s = %s" % (compareVar,compare))
@@ -393,23 +393,23 @@ def execute_logicnode(command,query):
             #print ("newvalue = %s" % newvalue)
             if newvalue < 0:
                 if settingsFile.has_option(section,"less"):
-                    newcommand = settingsFile.get(section,"less")
+                    newcommand = expandVariables(settingsFile.get(section,"less"),query)
                 elif settingsFile.has_option(section,"neg"):
-                    newcommand = settingsFile.get(section,"neg")
+                    newcommand = expandVariables(settingsFile.get(section,"neg"),query)
             elif newvalue > 0:
                 if settingsFile.has_option(section,"more"):
-                    newcommand = settingsFile.get(section,"more")
+                    newcommand = expandVariables(settingsFile.get(section,"more"),query)
                 elif settingsFile.has_option(section,"pos"):
-                    newcommand = settingsFile.get(section,"pos")
+                    newcommand = expandVariables(settingsFile.get(section,"pos"),query)
             else:
                 if settingsFile.has_option(section,"equal"):
-                    newcommand = settingsFile.get(section,"equal")
+                    newcommand = expandVariables(settingsFile.get(section,"equal"),query)
                 elif settingsFile.has_option(section,"zero"):
-                    newcommand = settingsFile.get(section,"zero")
+                    newcommand = expandVariables(settingsFile.get(section,"zero"),query)
         # print ("newcommand = %s" % newcommand)
         if newcommand == None:
             if settingsFile.has_option(section,"else"):
-                newcommand = settingsFile.get(section,"else")
+                newcommand = expandVariables(settingsFile.get(section,"else"),query)
             else:
                 return False
         else:
@@ -418,7 +418,7 @@ def execute_logicnode(command,query):
         # print ("Exception: %s" % e)
         try:
             if settingsFile.has_option(section,"error"):
-                newcommand = settingsFile.get(section,"error")
+                newcommand = expandVariables(settingsFile.get(section,"error"),query)
             return sendCommand(newcommand,query)
         except Exception as e:
             cprint ("LOGIC Failed: %s" % e,"yellow")
