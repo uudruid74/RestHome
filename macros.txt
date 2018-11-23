@@ -24,9 +24,9 @@ right value you may use an instruction such as:
     MACRO   Followed by a list of commands.  Any command may be followed by
             a comma and a repeat count.  You may also use the virtual "sleep"
             commands (sleep, sleep2, sleep3, etc) to pause for a set number
-            of seconds.  The list is space separated.
-            TO DO: Add parameters such that command(param=xxx) will set
-            the given parameter before running the command
+            of seconds.  The list is space separated.  Add parameters in
+            parenthesis and the given parameter is set before running the
+            command.
     SH      Short shell command to run, $param substitution is done
             WARNING!  $parameters are passed directly to the OS!  However,
             shell expansions and such are NOT done.  There is no shell!
@@ -55,6 +55,15 @@ by setting the "device" parameter to the named device section.  The variables
 in Status sections are unrelated.  If you wish to test a passed parameter,
 use the format $status(varname).  This will always be the word "status",
 in all lowercase, with the name of the status variable in parenthesis.
+
+You may set commandName(deviceDelay=0) and the given commandName (such as
+a MACRO) will be executed without any delay between commands.  You can set
+this to any value.  Likewise, you can set (device=xxx) to send a command
+to a different device - useful when you want a macro to send commands
+through multiple devices.  Remember that if you want commands to be run
+simultaneously, you just need to put them on a timer, such as 1 second,
+or set a variable and use a SET trigger to trigger the command, which
+uses a delay equal to the device delay.
 
 
 VARIABLES

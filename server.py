@@ -238,11 +238,12 @@ def sendCommand(commandName,params):
         device = devices[0]
         serviceName = 'Commands'
     elif deviceName in DeviceByName:
-        device = DeviceByName[deviceName];
-        params["deviceDelay"] = settings.Dev[deviceName,"Delay"]
+        device = DeviceByName[deviceName]
         serviceName = deviceName + ' Commands'
     else:
         return "Failed: No such device, %s" % deviceName
+    if "deviceDelay" not in params:
+        params["deviceDelay"] = settings.Dev[deviceName,"Delay"]
     if params["deviceDelay"] == None:
         params["deviceDelay"] = 0.2
     #print "Sending %s to %s, a type %s device" % (commandName, deviceName, device.Type)
@@ -300,8 +301,9 @@ def sendCommand(commandName,params):
                     return False
                 try:
                     device.send_data(finalCommand)
-                    time.sleep(settings.Dev[deviceName,"Delay"])
-                except Exception:
+                    time.sleep(float(params['deviceDelay']))
+                except Exception as e:
+                    #traceback.print_exc()
                     cprint ("Probably timed out..","yellow")
                     return False
             return commandName

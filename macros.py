@@ -175,8 +175,6 @@ def checkMacros(commandFromSettings,query):
 
 def exec_macro(commandFromSettings,query):
     expandedCommand = expandVariables(commandFromSettings[6:],query)
-
-    #cprint("expandedCommand = %s" % expandedCommand, "magenta")
     commandFromSettings = expandedCommand.strip()
     for command in commandFromSettings.split():
         newquery = query.copy()
