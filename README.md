@@ -1,7 +1,7 @@
-Broadlink HTTP server/proxy with REST API
-=========================================
-Supported devices: RM/RM2/RM Pro/RM3/BlackBean/A1
--------------------------------------------------
+Home Automation Backend Server with REST API
+============================================
+Supported devices: Most broadlink devices, anything supported by IFTTT, others via shell script
+-----------------------------------------------------------------------------------------------
 
 PYTHON 3.x READY and 2.x is no longer supported!  Fully multi-threaded!  Learns commands instantly!
 
