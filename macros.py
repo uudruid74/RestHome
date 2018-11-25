@@ -36,23 +36,26 @@ class EventList(object):
             else:
                 return 86400 #- 1 day
     def insert(self,node):
+        #print ("Insert %s = %s" % (node.name,node.command))
         with self.lock:
             node.nextNode = self.begin
             #- insert into beginning
             if self.begin == None or node.timestamp < node.nextNode.timestamp:
                 self.begin = node
-            else:
+                return
             #- insert into middle
-                while node.nextNode.nextNode != None:
-                    if node.timestamp >= node.nextNode.timestamp:
-                        node.nextNode = node.nextNode.nextNode
-                    else:
-                        node.nextNode = node
-                        node.nextNode = node.nextNode.nextNode
-                        return
+            last = pointer = self.begin
+            while pointer != None:
+                if node.timestamp >= pointer.timestamp:
+                    last = pointer
+                    pointer = pointer.nextNode
+                else:
+                    last.nextNode = node
+                    node.nextNode = pointer
+                    return
             #- insert at end
-                node.nextNode = node
-                node.nextNode = None
+            last.nextNode = node
+            node.nextNode = None
     def pop(self):
         with self.lock:
             retvalue = self.begin
@@ -65,8 +68,8 @@ class EventList(object):
         with self.lock:
             found = self.find(name)
             if found:
-                cprint("Deleting old event: %s" % name,"yellow")
-                self.delete(found)
+                cprint("Deleting old event: %s=%s" % (found.name,found.command),"yellow")
+                ret = self.delete(name)
             params['serialize'] = True
             self.insert(EventNode(name,fire,command,params))
     def find(self,name):
@@ -81,16 +84,28 @@ class EventList(object):
     def delete(self,name):
         with self.lock:
             node = self.begin
+            if node == None:
+                return None
             if node.name == name:
-                self.begin = self.begin.nextNode
+                self.begin = node.nextNode
+                return node
             while node.nextNode != None:
                 if node.nextNode.name == name:
                     found = node.nextNode
-                    node.nextNode = node.nextNode.nextNode
+                    node.nextNode = found.nextNode
                     return found
                 else:
                     node = node.nextNode
             return None
+    def dump(self):
+        now = time.time()
+        retval = '''{ "ok": "eventList" }\n'''
+        with self.lock:
+            node = self.begin
+            while node != None:
+                retval += '''{ "%s": "%s" }\n''' % ((int((node.timestamp - now)*100)/100), node.name + " = " + node.command)
+                node = node.nextNode
+        return retval
 
 eventList = EventList()
 
@@ -336,7 +351,7 @@ def execute_radio(command,query):
 def execute_timer(command,query):
     section = "TIMER "+command
     try:
-        command = expandVariables(settingsFile.get(section,"command"),query)
+        newcommand = expandVariables(settingsFile.get(section,"command"),query)
         delay = 0
         if settingsFile.has_option(section,"seconds"):
             delay += int(expandVariables(settingsFile.get(section,"seconds"),query))
@@ -345,7 +360,7 @@ def execute_timer(command,query):
         if settingsFile.has_option(section,"hours"):
             delay += int(expandVariables(settingsFile.get(section,"hours"),query)) * 3600
         cprint ("%s created, delay=%ss" % (section,delay),"green")
-        eventList.add(command,delay,command,query)
+        eventList.add(command,delay,newcommand,query)
         return command
     except Exception as e:
         cprint ("TIMER Failed: %s" % e,"yellow")

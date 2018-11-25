@@ -155,6 +155,12 @@ even if the command is a MACRO that contains commands that don't exist.
 Before, this would fail, but you could get a timeout waiting on a ton
 of commands.
 
+15) New command available in URLs
+You may now use **listEvents** to dump all pending Events as json data
+This is intended to allow front-end UIs to display the data.  You may
+also use **deleteEvent/eventName** where **eventName** is one of the listed
+events to delete that Event.  These two commands ignore any deviceName
+
 **TODO: REWRITE ALL DOCUMENTATION**
 **BUG:  Should pending events be saved when interrupting the server?
 

@@ -210,6 +210,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 response = "Failed: Unknown command - %s" % commandName
 
+        elif 'listEvents' in self.path:
+            response = macros.eventList.dump()
+
+        elif 'deleteEvent' in self.path:
+            if paths[2] == 'deleteEvent':
+                event = paths[3]
+            else:
+                event = paths[2]
+            retval = macros.eventList.delete(event)
+            if retval is not None:
+                response = '''{ "ok": "%s deleted" }''' % retval.name
+            else:
+                response = "Failed - no such event: %s" % event
+
         elif 'getSensor' in self.path:
             if paths[2] == 'getSensor':
                 sensor = paths[3]
@@ -246,7 +260,8 @@ def sendCommand(commandName,params):
         params["deviceDelay"] = devices.Dev[deviceName]["Delay"]
     if params["deviceDelay"] == None:
         params["deviceDelay"] = 0.2
-    params["command"] = commandName #- VERY IMPORTANT!
+    if 'command' not in params:
+        params["command"] = commandName #- VERY IMPORTANT!
 
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
@@ -260,11 +275,13 @@ def sendCommand(commandName,params):
             if commandName.endswith("on"):
                 newCommandName = commandName[:-2]
                 params[commandName + ' side-effect'] = True
-                setStatus(newCommandName, '1', params)
+                if setStatus(newCommandName, '1', params) == "1":
+                    return "Command Failed: %s already on" % newCommandName
             elif commandName.endswith("off"):
                 newCommandName = commandName[:-3]
                 params[commandName + ' side-effect'] = True
-                setStatus(newCommandName, '0', params)
+                if setStatus(newCommandName, '0', params) == "0":
+                    return "Command Failed: %s already off" % newCommandName
 
         if settingsFile.has_option(serviceName, commandName):
             command = settingsFile.get(serviceName, commandName)
@@ -345,7 +362,7 @@ def setStatus(commandName, status, params):
             rawcommand = settingsFile.get(section,"nop")
         else:
             rawcommand = "PRINT %s" % default
-        macros.eventList.add("NOP %s" % commandName,0,rawcommand,params)
+        macros.eventList.add("%s-NOP" % commandName,0,rawcommand,params)
         params[commandName+' side-effect'] = True
         return oldvalue
     func = devices.Dev[deviceName]["setStatus"]
@@ -367,7 +384,7 @@ def setStatus(commandName, status, params):
         if settingsFile.has_option(section, "trigger"):
             rawcommand = settingsFile.get(section, "trigger")
             params[commandName+' side-effect'] = True
-            macros.eventList.add("TRIGGER %s" % commandName,0,rawcommand,params)
+            macros.eventList.add("%s-TRIGGER" % commandName,0,rawcommand,params)
         else:
             try:
                 if status == "1":
@@ -376,13 +393,13 @@ def setStatus(commandName, status, params):
                     rawcommand = settingsFile.get(section,"off")
                 if rawcommand is not None:
                     params[commandName+' side-effect'] = True
-                    macros.eventList.add("TRIGGER %s" % commandName,0,rawcommand,params)
+                    macros.eventList.add("%s-TRIGGER" % commandName,0,rawcommand,params)
             except Exception as e:
                 cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
                 cprint ("ERROR was %s" % e,"yellow")
     elif settingsFile.has_section("LOGIC "+commandName):
         params[commandName+' side-effect'] = True
-        macros.eventList.add("LOGIC %s" % commandName,0,commandName,params)
+        macros.eventList.add("%s-LOGIC" % commandName,0,commandName,params)
         cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
     return oldvalue
 
