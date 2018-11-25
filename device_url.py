@@ -1,5 +1,7 @@
 import devices
 from termcolor import cprint
+from os import path
+import settings
 import threading
 import macros
 import traceback
@@ -9,14 +11,17 @@ import json
 try:
     import requests
 
-    def discover(timeout,listen,broadcast):
+    def discover(settingsFile,timeout,listen,broadcast):
         default = "IFTTT"
-        if settingsFile.has_section(device.hostname):
+        if settingsFile.has_section(default):
             return
+        print ("\tConfiguring default URL device, IFTTT ...")
+
+        settings.backupSettings()
         try:
             ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
-            device.hostname = "IFTTT"
             settingsFile.add_section(default)
+            settingsFile.add_section(default + ' Status')
             URL = '''https://maker.ifttt.com/trigger/$command/with/key/$status(API_KEY)'''
             API_KEY = '''Click 'Documentation' from https://ifttt.com/maker_webhooks to get API Key'''
             settingsFile.set(default,'URL',URL)
@@ -26,7 +31,7 @@ try:
             ControlIniFile.close()
         except Exception as e:
             cprint ("Error writing settings file: %s" % e,"yellow")
-            restoreSettings()
+            settings.restoreSettings()
 
 
     def readSettings(devname):

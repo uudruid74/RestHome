@@ -1,3 +1,4 @@
+from termcolor import cprint
 from collections import defaultdict
 
 global Dev
@@ -25,9 +26,9 @@ def addStartup(func):
 def addShutdown(func):
     FuncShutDown.append(func)
 
-def discover (timeout,listen,broadcast):
+def discover (settings,timeout,listen,broadcast):
     for func in FuncDiscover:
-        func(timeout,listen,broadcast)
+        func(settings,timeout,listen,broadcast)
 
 def readSettings (devname):
     for func in FuncReadSettings:

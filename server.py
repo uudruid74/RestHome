@@ -1,6 +1,7 @@
 #!/usr/bin/python3.4
 from termcolor import cprint
 from os import path
+from importlib import reload
 import devices
 import settings
 import traceback
@@ -15,7 +16,6 @@ import signal
 import socket
 import errno
 import json
-import shutil
 import macros
 import re
 import collections
@@ -26,6 +26,12 @@ import http.server
 
 import device_broadlink
 import device_url
+
+def reloadAll():
+    reload(devices)
+    reload(device_broadlink)
+    reload(device_url)
+    reload(settings)
 
 THROTTLE = 4    #- spawn per second
 
@@ -233,7 +239,7 @@ def sendCommand(commandName,params):
     deviceName = params["device"]
     #print '''SendCommand: %s to "%s"''' % (commandName,deviceName)
     if deviceName == None:
-        device = devicesStore[0]
+        device = devices.deviceStore[0]
         serviceName = 'Commands'
     elif deviceName in devices.DeviceByName:
         device = devices.DeviceByName[deviceName]
@@ -284,25 +290,32 @@ def sendCommand(commandName,params):
 
 
 def learnCommand(commandName, params):
+    print ("learnCommand called")
     deviceName = params["device"]
-    if deviceName == None:
-        device = devicesStore[0]
-        sectionName = 'Commands'
-    elif deviceName in devices.DeviceByName:
-        device = devices.DeviceByName[deviceName];
-        sectionName = deviceName + ' Commands'
-    else:
-        return "Failed: No such device, %s" % deviceName
+    print ("Got DeviceName")
+    try:
+        if deviceName == None:
+            device = devices.deviceStore[0]
+            sectionName = 'Commands'
+        elif deviceName in devices.DeviceByName:
+            device = devices.DeviceByName[deviceName];
+            sectionName = deviceName + ' Commands'
+        else:
+            return "Failed: No such device, %s" % deviceName
 
-    if OverwriteProtected and settingsFile.has_option(sectionName,commandName):
-        cprint ("Command %s alreadyExists and changes are protected!" % commandName,"yellow")
-        return False
+        print ("Checking Overwrite")
+        if OverwriteProtected and settingsFile.has_option(sectionName,commandName):
+            cprint ("Command %s alreadyExists and changes are protected!" % commandName,"yellow")
+            return False
+    except:
+        traceback.print_exc()
 
-    with device.Dev[deviceName]['Lock']:
+    print ("Locking device")
+    with devices.Dev[deviceName]['Lock']:
         cprint ("Waiting %d seconds to capture command" % GlobalTimeout,"magenta")
 
         decodedCommand = devices.Dev[deviceName]['learnCommand'](deviceName,device)
-        backupSettings()
+        settings.backupSettings()
         try:
             ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
             if not settingsFile.has_section(sectionName):
@@ -314,7 +327,7 @@ def learnCommand(commandName, params):
         except Exception as e:
             cprint("Error writing settings file: %s" % e,"yellow")
             traceback.print_exc()
-            restoreSettings()
+            settings.restoreSettings()
     return False
 
 
@@ -328,7 +341,7 @@ def setStatus(commandName, status, params):
         sectionName = deviceName + " Status"
 
     #print "command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName)
-    backupSettings()
+    settings.backupSettings()
     oldvalue = getStatus(commandName,params)
     if oldvalue == status:
         cprint ("Value of %s not changed: %s" % (commandName, status), "green")
@@ -367,7 +380,7 @@ def setStatus(commandName, status, params):
     except Exception as e:
         cprint ("Error writing settings file: %s" % e,"yellow")
         traceback.print_exc()
-        restoreSettings()
+        settings.restoreSettings()
         return False
 
 
@@ -415,7 +428,7 @@ def toggleStatus(commandName, params):
 def getSensor(sensorName,params):
     deviceName = params["device"]
     if deviceName == None:
-        device = devicesStore[0]
+        device = devices.deviceStore[0]
     elif deviceName in devices.DeviceByName:
         device = devices.DeviceByName[deviceName]
     else:
@@ -442,17 +455,6 @@ def start(handler_class=Handler, threads=8, port=8080, listen='0.0.0.0', timeout
     cprint("Closing Server ...", "green")
     sock.close()
 
-
-def backupSettings():
-    shutil.copy2(settings.settingsINI,settings.settingsINI+".bak")
-
-
-def restoreSettings():
-    if path.isfile(settings.settingsINI+".bak"):
-        shutil.copy2(settings.settingsINI+".bak",settings.settingsINI)
-    else:
-        cprint ("Can't find backup to restore!  Refusing to make this worse!","yellow")
-        sys.exit()
 
 
 def readSettingsFile(settingsFile):
@@ -520,7 +522,10 @@ def readSettingsFile(settingsFile):
     if Autodetect == True:
         cprint ("Beginning device auto-detection ... ","cyan")
         # Try to support multi-homed broadcast better
-        devices.discover(DiscoverTimeout,listen_address,broadcast_address)
+        devices.discover(settingsFile,DiscoverTimeout,listen_address,broadcast_address)
+        print()
+        reloadAll()
+        return None
 
     if devices.DevList:
         for devname in devices.DevList:
@@ -563,12 +568,14 @@ if __name__ == "__main__":
     while not ShutdownRequested.is_set():
         InterruptRequested.clear()
         settingsFile = configparser.ConfigParser()
-        serverParams = readSettingsFile(settingsFile)
+        serverParams = None
+        while serverParams is None:
+            serverParams = readSettingsFile(settingsFile)
         macros.init_callbacks(settingsFile,sendCommand,getStatus,setStatus,toggleStatus)
         devices.startUp()
         start(**serverParams)
         if not ShutdownRequested.is_set():
-            time.sleep(20)
+            time.sleep(18)
             cprint ("Reloading configuration ...\n","cyan")
-            reload(settings)
+            reloadAll()
     devices.shutDown()

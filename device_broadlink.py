@@ -1,7 +1,9 @@
 import devices
 from termcolor import cprint
 from Crypto.Cipher import AES
+from os import path
 import threading
+import settings
 import macros
 import binascii
 import traceback
@@ -19,26 +21,27 @@ try:
 #- Attempt to discover devices and create appropriate settings file
 #- entries for those devices
 
-    def discover(timeout,listen,broadcast):
+    def discover(settingsFile,timeout,listen,broadcast):
+        print ("\tDetecting Broadlink devices ...")
         try:
             broadlinkDevices = broadlink.discover(timeout,listen,broadcast)
         except:
             broadlinkDevices = broadlink.discover(timeout,listen)
 
         if broadlinkDevices:
-            devicesStore.append(broadlinkDevices)
+            devices.deviceStore.extend(broadlinkDevices)
 
-        backupSettings()
+        settings.backupSettings()
         try:
             ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
-            for device in devicesStore:
+            for device in broadlinkDevices:
                 try:
                     device.hostname = socket.gethostbyaddr(device.host[0])[0]
                     if "." in device.hostname:
                         device.hostname = device.hostname.split('.')[0]
                 except:
                     device.hostname = "Broadlink" + device.type.upper()
-                if device.hostname in DeviceByName:
+                if device.hostname in devices.DeviceByName:
                     device.hostname = "%s-%s" % (device.hostname, str(device.host).split('.')[3])
                 if not settingsFile.has_section(device.hostname):
                     settingsFile.add_section(device.hostname)
@@ -48,12 +51,12 @@ try:
                 settingsFile.set(device.hostname,'Device',hex(device.devtype))
                 settingsFile.set(device.hostname,'Timeout',str(device.timeout))
                 settingsFile.set(device.hostname,'Type',device.type.upper())
-                print(("%s: Found %s on %s (%s) type: %s" % (device.hostname, device.type, device.host, hexmac, hex(device.devtype))))
+                print("\t\t%s: Found %s on %s (%s) type: %s" % (device.hostname, device.type, device.host, hexmac, hex(device.devtype)))
             settingsFile.write(ControlIniFile)
             ControlIniFile.close()
         except Exception as e:
             cprint ("Error writing settings file: %s" % e,"yellow")
-            restoreSettings()
+            settings.restoreSettings()
 
 
 #- The Type attribute is used to declare what sort of device we need to return
@@ -90,25 +93,28 @@ try:
 
 
     def learnCommand(devname,device):
-        device.enter_learning()
-        start = time.time()
-        #- We want the real device delay here, not the modified one
-        #- min of 1 second.  Result is almost always 1 second
-        sleeptime = max(devices.Dev[devname]["Delay"],1.0)
-        LearnedCommand = None
-        while LearnedCommand is None and time.time() - start < GlobalTimeout:
-            time.sleep(sleeptime)
-            LearnedCommand = device.check_data()
+        try:
+            device.enter_learning()
+            start = time.time()
+            #- We want the real device delay here, not the modified one
+            #- min of 1 second.  Result is almost always 1 second
+            sleeptime = max(devices.Dev[devname]["Delay"],1.0)
+            LearnedCommand = None
+            while LearnedCommand is None and time.time() - start < settings.GlobalTimeout:
+                time.sleep(sleeptime)
+                LearnedCommand = device.check_data()
 
-        if LearnedCommand is None:
-            cprint('Command not received',"yellow")
-            return False
+            if LearnedCommand is None:
+                cprint('Command not received',"yellow")
+                return False
 
-        AdditionalData = bytearray([0x00, 0x00, 0x00, 0x00])
-        finalCommand = AdditionalData + LearnedCommand
+            AdditionalData = bytearray([0x00, 0x00, 0x00, 0x00])
+            finalCommand = AdditionalData + LearnedCommand
 
-        AESEncryption = AES.new(device.key, AES.MODE_CBC, bytes(device.iv))
-        return binascii.hexlify(AESEncryption.decrypt(bytes(finalCommand)))
+            AESEncryption = AES.new(device.key, AES.MODE_CBC, bytes(device.iv))
+            return binascii.hexlify(AESEncryption.decrypt(bytes(finalCommand)))
+        except:
+            traceback.print_exc()
 
 
     def sendCommand(command,device,deviceName,params):
@@ -162,4 +168,5 @@ try:
 
 except ImportError as e:
     cprint ("Broadlink device support requires broadlink python module.\npip3 install broadlink", "red")
+
 
