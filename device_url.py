@@ -58,6 +58,7 @@ try:
                 r = requests.post(url = URL, data = PostData)
                 cprint("%s/%s" % (deviceName,r.text),"green")
                 time.sleep(float(params['deviceDelay']))
+                return True
             return False
         except Exception as e:
             cprint("url sendCommand: %s to %s failed: %s" % (command,deviceName,e),"yellow")

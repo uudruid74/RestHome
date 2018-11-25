@@ -137,6 +137,7 @@ try:
             traceback.print_exc()
             cprint ("Probably timed out..","yellow")
             return False
+        return True
 
 
 #    def getStatus:
