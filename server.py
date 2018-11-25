@@ -292,24 +292,20 @@ def sendCommand(commandName,params):
 
 
 def learnCommand(commandName, params):
-    print ("learnCommand called")
     deviceName = params["device"]
-    print ("Got DeviceName")
     try:
         if deviceName in devices.DeviceByName:
             device = devices.DeviceByName[deviceName];
             sectionName = deviceName + ' Commands'
         else:
-            return "Failed: No such device, %s" % deviceName
-
-        print ("Checking Overwrite")
+            cprint ("Failed: No such device, %s" % deviceName,"yellow")
+            return False
         if OverwriteProtected and settingsFile.has_option(sectionName,commandName):
             cprint ("Command %s alreadyExists and changes are protected!" % commandName,"yellow")
             return False
-    except:
+    except Exception as e:
         traceback.print_exc()
 
-    print ("Locking device")
     with devices.Dev[deviceName]['Lock']:
         cprint ("Waiting %d seconds to capture command" % GlobalTimeout,"magenta")
 

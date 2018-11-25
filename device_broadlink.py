@@ -94,8 +94,8 @@ try:
             device.enter_learning()
             start = time.time()
             #- We want the real device delay here, not the modified one
-            #- min of 1 second.  Result is almost always 1 second
-            sleeptime = max(devices.Dev[devname]["Delay"],1.0)
+            #- min of 0.5 second.  Result is almost always 1 second
+            sleeptime = max(devices.Dev[devname]["Delay"],0.5)
             LearnedCommand = None
             while LearnedCommand is None and time.time() - start < settings.GlobalTimeout:
                 time.sleep(sleeptime)
