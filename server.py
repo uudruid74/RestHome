@@ -142,7 +142,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 commandName = paths[3]
             else:
                 commandName = paths[2]
-                deviceName = None
+                deviceName = devices.Dev['default']
             self.Parameters["device"] = deviceName
             result = learnCommand(commandName,self.Parameters)
             if result == False:
@@ -156,7 +156,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 commandName = paths[3]
             else:
                 commandName = paths[2]
-                deviceName = None
+                deviceName = devices.Dev['default']
             self.Parameters["device"] = deviceName
             result = sendCommand(commandName, self.Parameters)
             if result == False:
@@ -172,7 +172,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 deviceName = paths[1]
             else:
                 commandName = paths[2]
-                deviceName = None
+                deviceName = devices.Dev['default']
             self.Parameters["device"] = deviceName
             status = getStatus(commandName,self.Parameters)
             if (status):
@@ -187,7 +187,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 status = paths[4]
             else:
                 commandName = paths[2]
-                deviceName = None
+                deviceName = devices.Dev['default']
                 status = paths[3]
             self.Parameters["device"] = deviceName
             result = setStatus(commandName, status, self.Parameters)
@@ -202,13 +202,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 deviceName = paths[1]
             else:
                 commandName = paths[2]
-                deviceName = None
+                deviceName = devices.Dev['default']
             self.Parameters["device"] = deviceName
             status = toggleStatus(commandName, self.Parameters)
             if (status):
                 response = '''{ "%s": "%s" }''' % (commandName, status)
             else:
-                response = "Failed: Unknown command - %s"% commandName
+                response = "Failed: Unknown command - %s" % commandName
 
         elif 'getSensor' in self.path:
             if paths[2] == 'getSensor':
@@ -216,7 +216,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 deviceName = paths[1]
             else:
                 sensor = paths[2]
-                deviceName = None
+                deviceName = devices.Dev['default']
             self.Parameters["device"] = deviceName
             result = getSensor(sensor, self.Parameters)
             if result == False:
@@ -237,11 +237,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def sendCommand(commandName,params):
     deviceName = params["device"]
-    #print '''SendCommand: %s to "%s"''' % (commandName,deviceName)
-    if deviceName == None:
-        device = devices.deviceStore[0]
-        serviceName = 'Commands'
-    elif deviceName in devices.DeviceByName:
+    if deviceName in devices.DeviceByName:
         device = devices.DeviceByName[deviceName]
         serviceName = deviceName + ' Commands'
     else:
@@ -263,9 +259,11 @@ def sendCommand(commandName,params):
         if 'PRINT' not in commandName and 'MACRO' not in commandName:
             if commandName.endswith("on"):
                 newCommandName = commandName[:-2]
+                params[commandName + ' side-effect'] = True
                 setStatus(newCommandName, '1', params)
             elif commandName.endswith("off"):
                 newCommandName = commandName[:-3]
+                params[commandName + ' side-effect'] = True
                 setStatus(newCommandName, '0', params)
 
         if settingsFile.has_option(serviceName, commandName):
@@ -274,8 +272,10 @@ def sendCommand(commandName,params):
             command = settingsFile.get('Commands', commandName)
         elif settingsFile.has_option(serviceName, newCommandName):
             command = settingsFile.get(serviceName, newCommandName)
+            params['command'] = newCommandName
         elif settingsFile.has_option('Commands', newCommandName):
             command = settingsFile.get('Commands', newCommandName)
+            params['command'] = newCommandName
 
         if command is False:
             result = macros.checkMacros(commandName,params)
@@ -285,8 +285,10 @@ def sendCommand(commandName,params):
             return result
 
         with devices.Dev[deviceName]['Lock']:
-            devices.Dev[deviceName]['sendCommand'](command,device,deviceName,params)
-        return commandName
+            result = devices.Dev[deviceName]['sendCommand'](command,device,deviceName,params)
+        if result:
+            return commandName
+        return result
 
 
 def learnCommand(commandName, params):
@@ -294,10 +296,7 @@ def learnCommand(commandName, params):
     deviceName = params["device"]
     print ("Got DeviceName")
     try:
-        if deviceName == None:
-            device = devices.deviceStore[0]
-            sectionName = 'Commands'
-        elif deviceName in devices.DeviceByName:
+        if deviceName in devices.DeviceByName:
             device = devices.DeviceByName[deviceName];
             sectionName = deviceName + ' Commands'
         else:
@@ -336,36 +335,23 @@ def learnCommand(commandName, params):
 #- setting variables.
 def setStatus(commandName, status, params):
     deviceName = params["device"]
-    sectionName = 'Status'
-    if deviceName is not None and ('globalVariable' not in params or params['globalVariable'] is not commandName):
+    sectionName = 'Status'          #- Where the variables are stored
+    if 'globalVariable' not in params or params['globalVariable'] is not commandName:
         sectionName = deviceName + " Status"
 
-    #print "command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName)
+    #print ("setStatus command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName))
     settings.backupSettings()
     oldvalue = getStatus(commandName,params)
+    section = "SET " + commandName  #- Where trigger commands are stored
     if oldvalue == status:
-        cprint ("Value of %s not changed: %s" % (commandName, status), "green")
-        return oldvalue
-    if settingsFile.has_section("SET "+commandName):
-        section = "SET " + commandName
-        if settingsFile.has_option(section, "trigger"):
-            rawcommand = settingsFile.get(section, "trigger")
-            macros.eventList.add("TRIGGER %s" % commandName,0,rawcommand,params)
+        default= "Value of %s not changed: %s" % (commandName, status)
+        if settingsFile.has_option(section, "nop"):
+            rawcommand = settingsFile.get(section,"nop")
         else:
-            try:
-                #print("TEST returned %s" % value)
-                if status == "1":
-                    rawcommand = settingsFile.get(section,"on")
-                else:
-                    rawcommand = settingsFile.get(section,"off")
-                #print ("Raw %s: %s" % (commandName,rawcommand))
-                macros.eventList.add("TRIGGER %s" % commandName,0,rawcommand,params)
-            except Exception as e:
-                cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
-                cprint ("ERROR was %s" % e,"yellow")
-    elif settingsFile.has_section("LOGIC "+commandName):
-        macros.eventList.add("LOGIC %s" % commandName,0,commandName,params)
-        cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
+            rawcommand = "PRINT %s" % default
+        macros.eventList.add("NOP %s" % commandName,0,rawcommand,params)
+        params[commandName+' side-effect'] = True
+        return oldvalue
     func = devices.Dev[deviceName]["setStatus"]
     if func is not None:
         retval = func(deviceName,commandName,params)
@@ -376,24 +362,42 @@ def setStatus(commandName, status, params):
         settingsFile.set(sectionName, commandName, str(status))
         settingsFile.write(ControlIniFile)
         ControlIniFile.close()
-        return oldvalue
     except Exception as e:
         cprint ("Error writing settings file: %s" % e,"yellow")
         traceback.print_exc()
         settings.restoreSettings()
         return False
-
+    if settingsFile.has_section(section):
+        if settingsFile.has_option(section, "trigger"):
+            rawcommand = settingsFile.get(section, "trigger")
+            params[commandName+' side-effect'] = True
+            macros.eventList.add("TRIGGER %s" % commandName,0,rawcommand,params)
+        else:
+            try:
+                if status == "1":
+                    rawcommand = settingsFile.get(section,"on")
+                else:
+                    rawcommand = settingsFile.get(section,"off")
+                if rawcommand is not None:
+                    params[commandName+' side-effect'] = True
+                    macros.eventList.add("TRIGGER %s" % commandName,0,rawcommand,params)
+            except Exception as e:
+                cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
+                cprint ("ERROR was %s" % e,"yellow")
+    elif settingsFile.has_section("LOGIC "+commandName):
+        params[commandName+' side-effect'] = True
+        macros.eventList.add("LOGIC %s" % commandName,0,commandName,params)
+        cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
+    return oldvalue
 
 #- Use getStatus to read variables, either from the settings file or device
 def getStatus(commandName, params):
     deviceName = params["device"]
-    sectionName = 'Status'
-    if deviceName is not None:
-        sectionName = deviceName + " Status"
+    sectionName = deviceName + " Status"
 
     func = devices.Dev[deviceName]["getStatus"]
     if func is not None:
-        print ("getStatus func(%s) is %s" % (type(func),func))
+        #print ("getStatus func(%s) is %s" % (type(func),func))
         retval = func(deviceName,commandName,params)
         if retval is not False:
             return retval
@@ -401,15 +405,16 @@ def getStatus(commandName, params):
         status = settingsFile.get(sectionName, commandName)
         return status
     if settingsFile.has_option('Status',commandName):
-        status = settingsFile.get(sectionName, commandName)
+        status = settingsFile.get('Status', commandName)
         params["globalVariable"] = commandName
-        return status
+        if status:
+            return status
     status = getSensor(commandName,params)
     if status:
         return status
     else:
-        # print ("Can't find %s %s" % (sectionName, commandName))
-        return False
+        print ("Can't find %s %s" % (sectionName, commandName))
+        return "Fail"
 
 
 def toggleStatus(commandName, params):
@@ -427,9 +432,7 @@ def toggleStatus(commandName, params):
 
 def getSensor(sensorName,params):
     deviceName = params["device"]
-    if deviceName == None:
-        device = devices.deviceStore[0]
-    elif deviceName in devices.DeviceByName:
+    if deviceName in devices.DeviceByName:
         device = devices.DeviceByName[deviceName]
     else:
         return "Failed: No such device, %s" % deviceName
@@ -537,7 +540,6 @@ def readSettingsFile(settingsFile):
             #device.hostname = devname
             if hasattr(device, 'auth'):
                 device.auth()
-            devices.deviceStore.append(device)
             if devices.Dev[devname]['StartUpCommand'] != None:
                 commandName = devices.Dev[devname]['StartUpCommand']
                 query = {}

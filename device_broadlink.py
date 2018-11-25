@@ -28,9 +28,6 @@ try:
         except:
             broadlinkDevices = broadlink.discover(timeout,listen)
 
-        if broadlinkDevices:
-            devices.deviceStore.extend(broadlinkDevices)
-
         settings.backupSettings()
         try:
             ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
@@ -118,13 +115,20 @@ try:
 
 
     def sendCommand(command,device,deviceName,params):
+        if command is False and params[params['command'] + ' side-effect'] is True:
+            #- cprint ("Sorry, %s doesn't seem to be defined for your %s" % (params['command'],deviceName),"yellow")
+            #- Silently ignore commands that are just used for side-effects
+            return False
         try:
             decodedCommand = binascii.unhexlify(command)
             AESEncryption = AES.new(device.key, AES.MODE_CBC, bytes(device.iv))
             encodedCommand = AESEncryption.encrypt(bytes(decodedCommand))
             finalCommand = encodedCommand[0x04:]
         except Exception as e:
-            cprint("sendCommand: %s failed: %s" % (command,e),"yellow")
+            if command is False:
+                command = params['command']
+                e = "command is undefined"
+            cprint("broadlink sendCommand: %s to %s failed: %s" % (command,deviceName,e),"yellow")
             return False
         try:
             device.send_data(finalCommand)
@@ -140,7 +144,7 @@ try:
 #    def setStatus:
 
     def getSensor(device,deviceName,sensorName,params):
-        Dev = devices.Dev[devname]
+        Dev = devices.Dev[deviceName]
         try:
             # print ("Checking sensors %s %s" % (sensorName,deviceName))
             if "RM" in Dev['Type'].upper() and "temp" in sensorName:
@@ -154,7 +158,7 @@ try:
                     time.sleep(Dev["Delay"])
                     return result[sensorName]
             else:
-                cprint ("I don't know how to find sensor for a %s" % Dev['Type'], "yellow")
+                cprint ("I don't know how to find %s for a %s" % (sensorName,Dev['Type']), "yellow")
                 return False
         except Exception as e:
             cprint ("Error finding sensor %s in %s: %s" % (sensorName,deviceName,e),"yellow")

@@ -12,6 +12,7 @@ settings = configparser.ConfigParser()
 settings.read(settingsINI)
 
 DiscoverTimeout = GlobalTimeout = 20
+devices.Dev['default'] = None
 if settings.has_option('General', 'Timeout'):
     DiscoverTimeout = GlobalTimeout = int(settings.get('General', 'Timeout').strip())
 if settings.has_option('General', 'DiscoverTimeout'):
@@ -30,7 +31,8 @@ for section in settings.sections():
     #- These are devices
     print(("Configured Device: %s" % section))
     Dev = devices.Dev[section] = {}
-
+    if devices.Dev['default'] == None:
+        devices.Dev['default'] = section
     if settings.has_option(section,'IPAddress'):
         Dev['IPAddress'] = settings.get(section,'IPAddress').strip()
     if settings.has_option(section,'IPAddress'):

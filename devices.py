@@ -5,7 +5,6 @@ global Dev
 global DevList
 
 DeviceByName = {}
-deviceStore = []
 DevList = []
 Dev = defaultdict(dict)
 

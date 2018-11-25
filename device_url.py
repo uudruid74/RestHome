@@ -60,7 +60,8 @@ try:
                 time.sleep(float(params['deviceDelay']))
             return False
         except Exception as e:
-            cprint("sendCommand: %s failed: %s" % (command,e),"yellow")
+            cprint("url sendCommand: %s to %s failed: %s" % (command,deviceName,e),"yellow")
+            traceback.print_exc()
             return False
 
 
