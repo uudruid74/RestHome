@@ -1,16 +1,20 @@
 #!/usr/bin/python3.4
+from termcolor import cprint
+from os import path
+import devices
+import settings
+import traceback
 import datetime
 import threading
-import broadlink, configparser
-import sys, getopt
-import time, binascii
+import configparser
+import sys
+import getopt
+import time
 import netaddr
-import settings
 import signal
 import socket
 import errno
 import json
-import requests
 import shutil
 import macros
 import re
@@ -19,13 +23,12 @@ import platform
 import pdb
 import socketserver
 import http.server
-from termcolor import cprint
-from devices import devices, DeviceByName
-from os import path
-from Crypto.Cipher import AES
-import traceback
+
+import device_broadlink
+import device_url
 
 THROTTLE = 4    #- spawn per second
+
 
 class Thread(threading.Thread):
     def __init__(self, i, sock, addr, timeout):
@@ -48,12 +51,13 @@ class Thread(threading.Thread):
             timer = min(self.timeout,macros.eventList.nextEvent())
             while timer < 1:
                 event = macros.eventList.pop()
-                cprint ("EVENT (%s) %s (%s)" % (datetime.datetime.now().strftime("%I:%M:%S"),event.name,event.command),"blue")
+                cprint ("EVENT (%s) %s" % (datetime.datetime.now().strftime("%I:%M:%S"),event.name),"blue")
                 sendCommand(event.command,event.params)
                 print ('')
                 timer = min(self.timeout,macros.eventList.nextEvent())
             httpd.timeout = timer
             httpd.handle_request()
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     Parameters = collections.defaultdict(lambda : ' ')
@@ -83,7 +87,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.Parameters.update(json.loads(self.rfile.read(content_len).decode("utf-8")))
             password = self.Parameters['password'];
         except:
-            #traceback.print_exc()
+            traceback.print_exc()
             pass
         try:
             if GlobalPassword and GlobalPassword == password:
@@ -151,6 +155,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             result = sendCommand(commandName, self.Parameters)
             if result == False:
                 response = "Failed: Unknown command - %s" % commandName
+            elif result == True:
+                response = commandName
             else:
                 response = result
 
@@ -198,28 +204,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 response = "Failed: Unknown command - %s"% commandName
 
-        elif 'getSensor' in self.path or 'a1' in self.path:
+        elif 'getSensor' in self.path:
             if paths[2] == 'getSensor':
                 sensor = paths[3]
                 deviceName = paths[1]
             else:
                 sensor = paths[2]
                 deviceName = None
-                #- Old syntax - find a compatible device
-                if "A1" == paths[2].upper()[:2]:
-                    for dev in devices:
-                        if "A1" == dev.type.upper():
-                            deviceName = dev.hostname
-                            break
             self.Parameters["device"] = deviceName
             result = getSensor(sensor, self.Parameters)
             if result == False:
-                reponse = "Failed to get data"
+                response = "Failed to get data"
             else:
-                if sensor == 'temperature' or sensor == 'humidity':
-                    response = '''{ "%s": %s }''' % (sensor, result)
-                else:
-                    response = '''{ "%s": "%s" }''' % (sensor, result)
+                response = '''{ "%s": "%s" }''' % (sensor, result)
         else:
             response = "Failed"
         if "Failed" in response or "error" in response:
@@ -231,23 +228,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         cprint ("\t"+response,"white")
         print("")
 
+
 def sendCommand(commandName,params):
     deviceName = params["device"]
     #print '''SendCommand: %s to "%s"''' % (commandName,deviceName)
     if deviceName == None:
-        device = devices[0]
+        device = devicesStore[0]
         serviceName = 'Commands'
-    elif deviceName in DeviceByName:
-        device = DeviceByName[deviceName]
+    elif deviceName in devices.DeviceByName:
+        device = devices.DeviceByName[deviceName]
         serviceName = deviceName + ' Commands'
     else:
         return "Failed: No such device, %s" % deviceName
     if "deviceDelay" not in params:
-        params["deviceDelay"] = settings.Dev[deviceName,"Delay"]
+        params["deviceDelay"] = devices.Dev[deviceName]["Delay"]
     if params["deviceDelay"] == None:
         params["deviceDelay"] = 0.2
-    #print "Sending %s to %s, a type %s device" % (commandName, deviceName, device.Type)
-    params["command"] = commandName
+    params["command"] = commandName #- VERY IMPORTANT!
 
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
@@ -255,6 +252,7 @@ def sendCommand(commandName,params):
         if result:
             return result
 
+        command = False
         newCommandName = False
         if 'PRINT' not in commandName and 'MACRO' not in commandName:
             if commandName.endswith("on"):
@@ -272,50 +270,26 @@ def sendCommand(commandName,params):
             command = settingsFile.get(serviceName, newCommandName)
         elif settingsFile.has_option('Commands', newCommandName):
             command = settingsFile.get('Commands', newCommandName)
-        else:
-            command = commandName
 
-        result = macros.checkMacros(command,params)
+        if command is False:
+            result = macros.checkMacros(commandName,params)
+        else:
+            result = macros.checkMacros(command,params)
         if result:
             return result
 
-        if 'device' in params:
-            #print "Device %s is type %s" % (params['device'],device.Type)
-            if device.Type == 'URL':
-                URL = macros.expandVariables(device.url,params)
-                #print "Processing URL: %s" % URL
-                PostData = json.dumps(params)
-                r = requests.post(url = URL, data = PostData)
-                #print "Returned: %s" % r.text
-                return r.text
+        with devices.Dev[deviceName]['Lock']:
+            devices.Dev[deviceName]['sendCommand'](command,device,deviceName,params)
+        return commandName
 
-        if command != commandName:
-            with device.lock:
-                try:
-                    decodedCommand = binascii.unhexlify(command)
-                    AESEncryption = AES.new(device.key, AES.MODE_CBC, bytes(device.iv))
-                    encodedCommand = AESEncryption.encrypt(bytes(decodedCommand))
-                    finalCommand = encodedCommand[0x04:]
-                except Exception as e:
-                    cprint("sendCommand: %s failed: %s" % (command,e),"yellow")
-                    return False
-                try:
-                    device.send_data(finalCommand)
-                    time.sleep(float(params['deviceDelay']))
-                except Exception as e:
-                    #traceback.print_exc()
-                    cprint ("Probably timed out..","yellow")
-                    return False
-            return commandName
-        return newCommandName
 
 def learnCommand(commandName, params):
     deviceName = params["device"]
     if deviceName == None:
-        device = devices[0]
+        device = devicesStore[0]
         sectionName = 'Commands'
-    elif deviceName in DeviceByName:
-        device = DeviceByName[deviceName];
+    elif deviceName in devices.DeviceByName:
+        device = devices.DeviceByName[deviceName];
         sectionName = deviceName + ' Commands'
     else:
         return "Failed: No such device, %s" % deviceName
@@ -324,36 +298,18 @@ def learnCommand(commandName, params):
         cprint ("Command %s alreadyExists and changes are protected!" % commandName,"yellow")
         return False
 
-    with device.lock:
+    with device.Dev[deviceName]['Lock']:
         cprint ("Waiting %d seconds to capture command" % GlobalTimeout,"magenta")
 
-        device.enter_learning()
-        #time.sleep(GlobalTimeout)
-        start = time.time()
-        sleeptime = max(settings.Dev[deviceName,"Delay"],1.0)
-        LearnedCommand = None
-        while LearnedCommand is None and time.time() - start < GlobalTimeout:
-            time.sleep(sleeptime)
-            LearnedCommand = device.check_data()
-
-        if LearnedCommand is None:
-            cprint('Command not received',"yellow")
-            return False
-
-        AdditionalData = bytearray([0x00, 0x00, 0x00, 0x00])
-        finalCommand = AdditionalData + LearnedCommand
-
-        AESEncryption = AES.new(device.key, AES.MODE_CBC, bytes(device.iv))
-        decodedCommand = binascii.hexlify(AESEncryption.decrypt(bytes(finalCommand)))
-
+        decodedCommand = devices.Dev[deviceName]['learnCommand'](deviceName,device)
         backupSettings()
         try:
-            broadlinkControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
+            ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
             if not settingsFile.has_section(sectionName):
                 settingsFile.add_section(sectionName)
             settingsFile.set(sectionName, commandName, str(decodedCommand,'utf8'))
-            settingsFile.write(broadlinkControlIniFile)
-            broadlinkControlIniFile.close()
+            settingsFile.write(ControlIniFile)
+            ControlIniFile.close()
             return commandName
         except Exception as e:
             cprint("Error writing settings file: %s" % e,"yellow")
@@ -361,6 +317,10 @@ def learnCommand(commandName, params):
             restoreSettings()
     return False
 
+
+#- The setStatus command is not designed to perform actions, use sendCommand
+#- instead with on/off appended or pass a parameter.  Use setStatus for
+#- setting variables.
 def setStatus(commandName, status, params):
     deviceName = params["device"]
     sectionName = 'Status'
@@ -373,34 +333,36 @@ def setStatus(commandName, status, params):
     if oldvalue == status:
         cprint ("Value of %s not changed: %s" % (commandName, status), "green")
         return oldvalue
+    if settingsFile.has_section("SET "+commandName):
+        section = "SET " + commandName
+        if settingsFile.has_option(section, "trigger"):
+            rawcommand = settingsFile.get(section, "trigger")
+            macros.eventList.add("TRIGGER %s" % commandName,0,rawcommand,params)
+        else:
+            try:
+                #print("TEST returned %s" % value)
+                if status == "1":
+                    rawcommand = settingsFile.get(section,"on")
+                else:
+                    rawcommand = settingsFile.get(section,"off")
+                #print ("Raw %s: %s" % (commandName,rawcommand))
+                macros.eventList.add("TRIGGER %s" % commandName,0,rawcommand,params)
+            except Exception as e:
+                cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
+                cprint ("ERROR was %s" % e,"yellow")
+    elif settingsFile.has_section("LOGIC "+commandName):
+        macros.eventList.add("LOGIC %s" % commandName,0,commandName,params)
+        cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
+    func = devices.Dev[deviceName]["setStatus"]
+    if func is not None:
+        retval = func(deviceName,commandName,params)
     try:
         if not settingsFile.has_section(sectionName):
             settingsFile.add_section(sectionName)
-        broadlinkControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
+        ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
         settingsFile.set(sectionName, commandName, str(status))
-        settingsFile.write(broadlinkControlIniFile)
-        broadlinkControlIniFile.close()
-        if settingsFile.has_section("SET "+commandName):
-            section = "SET " + commandName
-            if settingsFile.has_option(section, "trigger"):
-                rawcommand = settingsFile.get(section, "trigger")
-                macros.eventList.add("TRIGGER %s" % commandName,1,rawcommand,params)
-            else:
-                try:
-                    value = getStatus(commandName,params)
-                    #print("TEST returned %s" % value)
-                    if value == "1":
-                        rawcommand = settingsFile.get(section,"on")
-                    else:
-                        rawcommand = settingsFile.get(section,"off")
-                    #print ("Raw %s: %s" % (commandName,rawcommand))
-                    macros.eventList.add("TRIGGER %s" % commandName,1,rawcommand,params)
-                except Exception as e:
-                    cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
-                    cprint ("ERROR was %s" % e,"yellow")
-        elif settingsFile.has_section("LOGIC "+commandName):
-            macros.eventList.add("LOGIC %s" % commandName,1,commandName,params)
-            cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
+        settingsFile.write(ControlIniFile)
+        ControlIniFile.close()
         return oldvalue
     except Exception as e:
         cprint ("Error writing settings file: %s" % e,"yellow")
@@ -408,14 +370,20 @@ def setStatus(commandName, status, params):
         restoreSettings()
         return False
 
+
+#- Use getStatus to read variables, either from the settings file or device
 def getStatus(commandName, params):
     deviceName = params["device"]
     sectionName = 'Status'
     if deviceName is not None:
         sectionName = deviceName + " Status"
 
-    #print "devicename = %s section = %s" % (deviceName, sectionName)
-
+    func = devices.Dev[deviceName]["getStatus"]
+    if func is not None:
+        print ("getStatus func(%s) is %s" % (type(func),func))
+        retval = func(deviceName,commandName,params)
+        if retval is not False:
+            return retval
     if settingsFile.has_option(sectionName,commandName):
         status = settingsFile.get(sectionName, commandName)
         return status
@@ -428,7 +396,8 @@ def getStatus(commandName, params):
         return status
     else:
         # print ("Can't find %s %s" % (sectionName, commandName))
-        return '0'
+        return False
+
 
 def toggleStatus(commandName, params):
     status = getStatus(commandName,params)
@@ -442,31 +411,22 @@ def toggleStatus(commandName, params):
         pass
     return getStatus(commandName,params)
 
+
 def getSensor(sensorName,params):
     deviceName = params["device"]
     if deviceName == None:
-        device = devices[0]
-    elif deviceName in DeviceByName:
-        device = DeviceByName[deviceName]
+        device = devicesStore[0]
+    elif deviceName in devices.DeviceByName:
+        device = devices.DeviceByName[deviceName]
     else:
         return "Failed: No such device, %s" % deviceName
 
-    with device.lock:
-        try:
-            # print ("Checking sensors %s %s" % (sensorName,deviceName))
-            if "RM" in device.type.upper() and "temp" in sensorName:
-                temperature = device.check_temperature()
-                if temperature:
-                    time.sleep(settings.Dev[deviceName,"Delay"])
-                    return temperature
-            if "A1" in device.type.upper():
-                result = device.check_sensors()
-                if result:
-                    time.sleep(settings.Dev[deviceName,"Delay"])
-                    return result[sensorName]
-        except:
-            pass    #- Ignore errors and just return false
+    with devices.Dev[deviceName]['Lock']:
+        func = devices.Dev[deviceName]["getSensor"]
+        if func is not None:
+            return func(device,deviceName,sensorName,params)
     return False
+
 
 def start(handler_class=Handler, threads=8, port=8080, listen='0.0.0.0', timeout=20):
     addr = (listen,port)
@@ -482,8 +442,10 @@ def start(handler_class=Handler, threads=8, port=8080, listen='0.0.0.0', timeout
     cprint("Closing Server ...", "green")
     sock.close()
 
+
 def backupSettings():
     shutil.copy2(settings.settingsINI,settings.settingsINI+".bak")
+
 
 def restoreSettings():
     if path.isfile(settings.settingsINI+".bak"):
@@ -492,15 +454,13 @@ def restoreSettings():
         cprint ("Can't find backup to restore!  Refusing to make this worse!","yellow")
         sys.exit()
 
-def readSettingsFile():
-    global devices
-    global DeviceByName
+
+def readSettingsFile(settingsFile):
     global RestrictAccess
     global LearnFrom
     global OverwriteProtected
     global GlobalPassword
     global GlobalTimeout
-    global settingsFile
 
     # A few defaults
     serverPort = 8080
@@ -509,11 +469,9 @@ def readSettingsFile():
     listen_address = '0.0.0.0'
     broadcast_address = '255.255.255.255'
 
-    settingsFile = configparser.ConfigParser()
     settingsFile.optionxform = str
     settingsFile.read(settings.settingsINI)
 
-    Dev = settings.Dev
     GlobalTimeout = settings.GlobalTimeout
     DiscoverTimeout = settings.DiscoverTimeout
 
@@ -556,92 +514,44 @@ def readSettingsFile():
         settingsFile.remove_option('General','Autodetect')
 
     # Device list
-    if not settings.DevList:
+    if not devices.DevList:
         Autodetect = True
 
     if Autodetect == True:
         cprint ("Beginning device auto-detection ... ","cyan")
         # Try to support multi-homed broadcast better
-        try:
-            devices = broadlink.discover(DiscoverTimeout,listen_address,broadcast_address)
-        except:
-            devices = broadlink.discover(DiscoverTimeout,listen_address)
+        devices.discover(DiscoverTimeout,listen_address,broadcast_address)
 
-        backupSettings()
-        try:
-            broadlinkControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
-            for device in devices:
-                try:
-                    device.hostname = socket.gethostbyaddr(device.host[0])[0]
-                    if "." in device.hostname:
-                        device.hostname = device.hostname.split('.')[0]
-                except:
-                    device.hostname = "Broadlink" + device.type.upper()
-                if device.hostname in DeviceByName:
-                    device.hostname = "%s-%s" % (device.hostname, str(device.host).split('.')[3])
-                DeviceByName[device.hostname] = device
-                if not settingsFile.has_section(device.hostname):
-                    settingsFile.add_section(device.hostname)
-                settingsFile.set(device.hostname,'IPAddress',str(device.host[0]))
-                hexmac = ':'.join( [ "%02x" % ( x ) for x in reversed(device.mac) ] )
-                settingsFile.set(device.hostname,'MACAddress',hexmac)
-                settingsFile.set(device.hostname,'Device',hex(device.devtype))
-                settingsFile.set(device.hostname,'Timeout',str(device.timeout))
-                settingsFile.set(device.hostname,'Type',device.type.upper())
+    if devices.DevList:
+        for devname in devices.DevList:
+            device = devices.readSettings(devname)
+            devices.Dev[devname]['Lock'] = threading.RLock()
+            print("Setting %s to Type %s" % (devname,devices.Dev[devname]['Type']))
+            if not devname in devices.DeviceByName:
+                devices.DeviceByName[devname] = device
+            #device.hostname = devname
+            if hasattr(device, 'auth'):
                 device.auth()
-                print(("%s: Found %s on %s (%s) type: %s" % (device.hostname, device.type, device.host, hexmac, hex(device.devtype))))
-            settingsFile.write(broadlinkControlIniFile)
-            broadlinkControlIniFile.close()
-        except Exception as e:
-            cprint ("Error writing settings file: %s" % e,"yellow")
-            restoreSettings()
-    if settings.DevList:
-        for devname in settings.DevList:
-            if Dev[devname,'Type'] == 'RM' or Dev[devname,'Type'] == 'RM2':
-                device = broadlink.rm((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            elif Dev[devname,'Type'] == 'MP1':
-                device = broadlink.mp1((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            elif Dev[devname,'Type'] == 'SP1':
-                device = broadlink.sp1((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            elif Dev[devname,'Type'] == 'SP2':
-                device = broadlink.sp2((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            elif Dev[devname,'Type'] == 'A1':
-                device = broadlink.a1((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            elif Dev[devname,'Type'] == 'HYSEN':
-                device = broadlink.hysen((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            elif Dev[devname,'Type'] == 'S1C':
-                device = broadlink.S1C((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            elif Dev[devname,'Type'] == 'DOOYA':
-                device = broadlink.dooya((Dev[devname,'IPAddress'], 80), Dev[devname,'MACAddress'], Dev[devname,'Device'])
-            elif Dev[devname,'Type'] == 'URL':
-                device = type('', (), {})()
-                device.url = Dev[devname,'URL']
-            device.timeout = Dev[devname,'Timeout']
-            device.Type = Dev[devname,'Type']
-            device.lock = threading.RLock()
-            print("Setting %s to Type %s" % (devname,device.Type))
-            if not devname in DeviceByName:
-                device.hostname = devname
-                if hasattr(device, 'auth'):
-                    device.auth()
-                devices.append(device)
-            DeviceByName[devname] = device
-            if Dev[devname,'StartUpCommand'] != None:
-                commandName = Dev[devname,'StartUpCommand']
+            devices.deviceStore.append(device)
+            if devices.Dev[devname]['StartUpCommand'] != None:
+                commandName = devices.Dev[devname]['StartUpCommand']
                 query = {}
                 query["device"] = devname
                 macros.eventList.add("StartUp"+commandName,1,commandName,query)
 
     return { "port": serverPort, "listen": listen_address, "threads": MaxThreads, "timeout": GlobalTimeout }
 
+
 def SigUsr1(signum, frame):
     cprint ("\nReload requested ... (this will take awhile)","cyan")
     InterruptRequested.set()
+
 
 def SigInt(signum, frame):
     cprint ("\nShuting down server ...","cyan")
     ShutdownRequested.set()
     InterruptRequested.set()
+
 
 if __name__ == "__main__":
     ShutdownRequested = threading.Event()
@@ -652,10 +562,13 @@ if __name__ == "__main__":
         signal.signal(signal.SIGINT,SigInt)
     while not ShutdownRequested.is_set():
         InterruptRequested.clear()
-        serverParams = readSettingsFile()
+        settingsFile = configparser.ConfigParser()
+        serverParams = readSettingsFile(settingsFile)
         macros.init_callbacks(settingsFile,sendCommand,getStatus,setStatus,toggleStatus)
+        devices.startUp()
         start(**serverParams)
         if not ShutdownRequested.is_set():
             time.sleep(20)
             cprint ("Reloading configuration ...\n","cyan")
             reload(settings)
+    devices.shutDown()

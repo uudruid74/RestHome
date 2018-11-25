@@ -9,10 +9,7 @@ Uses [python-broadlink](https://github.com/mjg59/python-broadlink)
 
 Based and inspired by [BlackBeanControl](https://github.com/davorf/BlackBeanControl)
 
-Now requires "termcolor" module for more readable output.
-````
-pip install termcolor
-````
+Real PDF Documentation (LyX source) on the programming options is underway!
 
 Example usage
 -------------

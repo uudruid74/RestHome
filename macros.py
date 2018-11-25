@@ -3,7 +3,6 @@ import string
 import time
 from platform import system as system_name
 from math import ceil as ceiling
-from devices import devices, DeviceByName
 from termcolor import cprint
 import subprocess
 import json
@@ -27,7 +26,6 @@ class EventNode(object):
 
 class EventList(object):
     def __init__(self):
-#        print "creating Eventlist"
         self.begin = None
         self.lock = threading.RLock()
     def nextEvent(self):
@@ -38,16 +36,13 @@ class EventList(object):
             else:
                 return 86400 #- 1 day
     def insert(self,node):
-#        print "Inserting"
         with self.lock:
             node.nextNode = self.begin
             #- insert into beginning
             if self.begin == None or node.timestamp < node.nextNode.timestamp:
-                #print "Insert at beginning"
                 self.begin = node
             else:
             #- insert into middle
-                #print "Insert in middle"
                 while node.nextNode.nextNode != None:
                     if node.timestamp >= node.nextNode.timestamp:
                         node.nextNode = node.nextNode.nextNode
@@ -56,11 +51,9 @@ class EventList(object):
                         node.nextNode = node.nextNode.nextNode
                         return
             #- insert at end
-                #print "Insert at end"
                 node.nextNode = node
                 node.nextNode = None
     def pop(self):
-#        print "pop"
         with self.lock:
             retvalue = self.begin
             if retvalue is not None and retvalue.nextNode is not None:
@@ -69,7 +62,6 @@ class EventList(object):
                 self.begin = None
             return retvalue
     def add(self,name,fire,command,params):
-#        print "add"
         with self.lock:
             found = self.find(name)
             if found:
@@ -78,7 +70,6 @@ class EventList(object):
             params['serialize'] = True
             self.insert(EventNode(name,fire,command,params))
     def find(self,name):
-#        print "find"
         with self.lock:
             node = self.begin
             while node != None:
@@ -88,7 +79,6 @@ class EventList(object):
                     node = node.nextNode
             return None
     def delete(self,name):
-#        print "delete"
         with self.lock:
             node = self.begin
             if node.name == name:
@@ -117,13 +107,12 @@ def expandVariables(commandString,query):
         varname = commandString[statusVar+8:endVar]
         varvalue = getStatus(varname,query)
         commandString = commandString.replace(commandString[statusVar:endVar+1],varvalue)
-#        print ("%s = %s device = %s" % (varname,varvalue,query['device']))
-#        print ("new: %s" % commandString)
         statusVar = commandString.find("$status(")
     firstPass = commandString
     secondPass = string.Template(firstPass).substitute(query)
     return secondPass
 
+#- return True if it's a MACRO = stops execution of command!
 def checkMacros(commandFromSettings,query):
     #print ("checkMacros %s" % commandFromSettings)
     if commandFromSettings.startswith("PRINT "):
@@ -136,42 +125,47 @@ def checkMacros(commandFromSettings,query):
         shellCommand(expandVariables(commandFromSettings[3:],query))
         return True
     elif commandFromSettings.startswith("SET "):
-        return setStatus(commandFromSettings[4:],"1",query)
+        setStatus(commandFromSettings[4:],"1",query)
+        return True
     elif commandFromSettings.startswith("INC "):
         variable = int(getStatus(commandFromSettings[4:],query))
         variable += 1
         setStatus(commandFromSettings[4:],str(variable),query)
-        return str(variable)
+        return True
     elif commandFromSettings.startswith("CANCEL "):
         variable = int(getStatus(commandFromSettings[7:],query))
         eventList.delete(variable)
-        return "{ '''cancelled''': '''%s''' }" % variable
+        return True
     elif commandFromSettings.startswith("DEC "):
         variable = int(getStatus(commandFromSettings[4:],query))
         variable -= 1
         setStatus(commandFromSettings[4:],str(variable),query)
-        return str(variable)
+        return True
     elif commandFromSettings.startswith("CLEAR "):
-        return setStatus(commandFromSettings[6:],"0",query)
+        setStatus(commandFromSettings[6:],"0",query)
+        return True
     elif commandFromSettings.startswith("TOGGLE "):
-        return toggleStatus(commandFromSettings[7:],query)
+        toggleStatus(commandFromSettings[7:],query)
+        return True
     elif commandFromSettings.startswith("RELAY "):
         device = commandFromSettings[6:]
         if device == query['device']:
             cprint ("RELAY %s attempted to relay to itself" % query['command'],"yellow")
-            return False
+            return True
         newquery = query.copy()
         newquery['device'] = device
-        #print "Relaying %s to %s" % (query['command'],device)
-        return sendCommand(query['command'],newquery)
+        #print ("Relaying %s to %s" % (query['command'],device))
+        sendCommand(query['command'],newquery)
+        return True
     elif commandFromSettings.startswith("MACRO "):
         if 'serialize' in query and query['serialize']:
             exec_macro(commandFromSettings,query)
         else:
             eventList.add(query['command'],query["deviceDelay"],commandFromSettings,query)
-        return query['command']
+        return True
     else:
         return False #- not a macro
+
 
 def exec_macro(commandFromSettings,query):
     expandedCommand = expandVariables(commandFromSettings[6:],query)
