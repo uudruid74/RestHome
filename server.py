@@ -260,8 +260,7 @@ def sendCommand(commandName,params):
         params["deviceDelay"] = devices.Dev[deviceName]["Delay"]
     if params["deviceDelay"] == None:
         params["deviceDelay"] = 0.2
-    if 'command' not in params:
-        params["command"] = commandName #- VERY IMPORTANT!
+    params["command"] = commandName #- VERY IMPORTANT!
 
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
