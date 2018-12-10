@@ -14,12 +14,12 @@ Real PDF Documentation (source is in LyX) on the programming options is underway
 
 System Features
 ---------------
-- ** Multithreaded      **  Responsive, handles multiple clients, programmable events and timers
-- ** Programmable       **  Macro Language contains variables, loops, conditions, and shell integration
-- ** IFTTT Integration  **  Send or Recieve commands from IFTTT to control anything IFTTT can control
-- ** Virtual Devices    **  A single broadlink can control multiple virtual devices
-- ** Chromecast         **  Integrated Chromecast functions are COMING SOON!
-- ** Fast Learning      **  No more waiting 20 seconds to learn every command!
+- **Multithreaded**     Responsive, handles multiple clients, programmable events and timers
+- **Programmable**      Macro Language contains variables, loops, conditions, and shell integration
+- **IFTTT Integration** Send or Recieve commands from IFTTT to control anything IFTTT can control
+- **Virtual Devices**   A single broadlink can control multiple virtual devices
+- **Chromecast**        Integrated Chromecast functions are COMING SOON!
+- **Fast Learning**     No more waiting 20 seconds to learn every command!
 
 
 Example usage
