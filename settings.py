@@ -23,19 +23,23 @@ for section in settings.sections():
     if section == 'General' or 'Commands' in section or 'Status' in section:
         continue
     #- Special sections, control nodes
-    if section.startswith("LOGIC ") or section.startswith("SET ") or \
-            section.startswith("TEST ") or section.startswith("CHECK ") or \
-            section.startswith("TIMER ") or section.startswith("RADIO") or \
+    if section.startswith("LOGIC ") or section.startswith("TRIGGER ") or \
+            section.startswith("TEST ") or section.startswith("PING ") or \
+            section.startswith("EVENT ") or section.startswith("RADIO") or \
             section.startswith("WOL ") or section.startswith("SHELL "):
         continue
     #- These are devices
-    print(("Configured Device: %s" % section))
+    # print(("Configured Device: %s" % section))
     Dev = devices.Dev[section] = {}
     if devices.Dev['default'] == None:
         devices.Dev['default'] = section
     if settings.has_option(section,'IPAddress'):
-        Dev['IPAddress'] = settings.get(section,'IPAddress').strip()
-    if settings.has_option(section,'IPAddress'):
+        if '$status(' in settings.get(section,'IPAddress'):
+            name = settings.get(section,'IPAddress')[8:-1]
+            Dev['IPAddress'] = settings.get('Status',name).strip()
+        else:
+            Dev['IPAddress'] = settings.get(section,'IPAddress').strip()
+    if settings.has_option(section,'MACAddress'):
         Dev['MACAddress'] = netaddr.EUI(settings.get(section, 'MACAddress'))
     if settings.has_option(section,'URL'):
         Dev['URL'] = settings.get(section,'URL').strip()
@@ -43,11 +47,15 @@ for section in settings.sections():
         Dev['Timeout'] = int(settings.get(section, 'Timeout').strip())
     else:
         Dev['Timeout'] = 6
+    if settings.has_option(section,'Comment'):
+        Dev['Comment'] = settings.get(section,'Comment')
     if settings.has_option(section,'Delay'):
         Dev['Delay'] = float(settings.get(section, 'Delay').strip())
-    else:
-        Dev['Delay'] = 0.0
     #print '''Setting "%s" delay to "%s"''' % (section,Dev[section,'Delay'])
+    if settings.has_option(section,'skipRepeats'):
+        Dev['skipRepeats'] = bool(settings.get(section, 'skipRepeats'))
+    else:
+        Dev['skipRepeats'] = True
     if settings.has_option(section,'Device'):
         Dev['Device'] = int(settings.get(section, 'Device').strip(),16)
     else:
@@ -61,6 +69,10 @@ for section in settings.sections():
         Dev['StartUpCommand'] = settings.get(section,'StartUpCommand').strip()
     else:
         Dev['StartUpCommand'] = None
+    if settings.has_option(section,'Actual'):
+        Dev['Actual'] = settings.get(section,'Actual').strip()
+    else:
+        Dev['Actual'] = None
     devices.DevList.append(section.strip())
 
 def backupSettings():

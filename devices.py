@@ -7,6 +7,7 @@ global DevList
 DeviceByName = {}
 DevList = []
 Dev = defaultdict(dict)
+Modlist = {}
 
 FuncDiscover = []
 FuncReadSettings = []

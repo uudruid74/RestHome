@@ -26,11 +26,13 @@ import http.server
 
 import device_broadlink
 import device_url
+import device_virtual
 
 def reloadAll():
     reload(devices)
     reload(device_broadlink)
     reload(device_url)
+    reload(device_virtual)
     reload(settings)
 
 THROTTLE = 4    #- spawn per second
@@ -82,6 +84,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self.messageHandler()
                 except NameError as e:
                     cprint ("Error: %s" % e,"yellow")
+                    traceback.print_exc()
                     self.password_required()
         except NameError:                   #- No security specified
             self.messageHandler()
@@ -250,48 +253,50 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def sendCommand(commandName,params):
-    deviceName = params["device"]
+    deviceName = params['device']
     if deviceName in devices.DeviceByName:
         device = devices.DeviceByName[deviceName]
         serviceName = deviceName + ' Commands'
     else:
         return "Failed: No such device, %s" % deviceName
     if "deviceDelay" not in params:
-        params["deviceDelay"] = devices.Dev[deviceName]["Delay"]
+        params["deviceDelay"] = device.delay
     if params["deviceDelay"] == None:
         params["deviceDelay"] = 0.2
     params["command"] = commandName #- VERY IMPORTANT!
 
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
-        #print ("checkCond result: %s = %s" % (commandName,result))
         if result:
             return result
 
         command = False
         newCommandName = False
-        if 'PRINT' not in commandName and 'MACRO' not in commandName:
+        isRepeat = False
+        if 'PRINT' not in commandName and 'MACRO' not in commandName and '>' not in commandName:
             if commandName.endswith("on"):
                 newCommandName = commandName[:-2]
                 params[commandName + ' side-effect'] = True
                 if setStatus(newCommandName, '1', params) == "1":
-                    return "Command Failed: %s already on" % newCommandName
+                    isRepeat = True
             elif commandName.endswith("off"):
                 newCommandName = commandName[:-3]
                 params[commandName + ' side-effect'] = True
                 if setStatus(newCommandName, '0', params) == "0":
-                    return "Command Failed: %s already off" % newCommandName
+                    isRepeat = True
 
         if settingsFile.has_option(serviceName, commandName):
             command = settingsFile.get(serviceName, commandName)
         elif settingsFile.has_option('Commands', commandName):
             command = settingsFile.get('Commands', commandName)
-        elif settingsFile.has_option(serviceName, newCommandName):
-            command = settingsFile.get(serviceName, newCommandName)
-            params['command'] = newCommandName
-        elif settingsFile.has_option('Commands', newCommandName):
-            command = settingsFile.get('Commands', newCommandName)
-            params['command'] = newCommandName
+
+        if not isRepeat:
+            if settingsFile.has_option(serviceName, newCommandName):
+                command = settingsFile.get(serviceName, newCommandName)
+                params['command'] = newCommandName
+            elif settingsFile.has_option('Commands', newCommandName):
+                command = settingsFile.get('Commands', newCommandName)
+                params['command'] = newCommandName
 
         if command is False:
             result = macros.checkMacros(commandName,params)
@@ -325,7 +330,7 @@ def learnCommand(commandName, params):
     with devices.Dev[deviceName]['Lock']:
         cprint ("Waiting %d seconds to capture command" % GlobalTimeout,"magenta")
 
-        decodedCommand = devices.Dev[deviceName]['learnCommand'](deviceName,device)
+        decodedCommand = devices.Dev[deviceName]['learnCommand'](deviceName,device,params)
         settings.backupSettings()
         try:
             ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
@@ -348,13 +353,12 @@ def learnCommand(commandName, params):
 def setStatus(commandName, status, params):
     deviceName = params["device"]
     sectionName = 'Status'          #- Where the variables are stored
-    if 'globalVariable' not in params or params['globalVariable'] is not commandName:
+    if 'globalVariable' not in params or params['globalVariable'] != commandName:
         sectionName = deviceName + " Status"
-
     #print ("setStatus command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName))
     settings.backupSettings()
     oldvalue = getStatus(commandName,params)
-    section = "SET " + commandName  #- Where trigger commands are stored
+    section = "TRIGGER " + commandName  #- Where trigger commands are stored
     if oldvalue == status:
         default= "Value of %s not changed: %s" % (commandName, status)
         if settingsFile.has_option(section, "nop"):
@@ -366,7 +370,7 @@ def setStatus(commandName, status, params):
         return oldvalue
     func = devices.Dev[deviceName]["setStatus"]
     if func is not None:
-        retval = func(deviceName,commandName,params)
+        retval = func(deviceName,commandName,params,oldvalue,status)
     try:
         if not settingsFile.has_section(sectionName):
             settingsFile.add_section(sectionName)
@@ -380,8 +384,10 @@ def setStatus(commandName, status, params):
         settings.restoreSettings()
         return False
     if settingsFile.has_section(section):
-        if settingsFile.has_option(section, "trigger"):
-            rawcommand = settingsFile.get(section, "trigger")
+        params['value'] = status
+        params['oldvalue'] = oldvalue
+        if settingsFile.has_option(section, "command"):
+            rawcommand = settingsFile.get(section, "command")
             params[commandName+' side-effect'] = True
             macros.eventList.add("%s-TRIGGER" % commandName,0,rawcommand,params)
         else:
@@ -394,7 +400,7 @@ def setStatus(commandName, status, params):
                     params[commandName+' side-effect'] = True
                     macros.eventList.add("%s-TRIGGER" % commandName,0,rawcommand,params)
             except Exception as e:
-                cprint("SET %s: A trigger or on/off pair is required" % commandName, "yellow")
+                cprint("TRIGGER %s: A command or on/off pair is required" % commandName, "yellow")
                 cprint ("ERROR was %s" % e,"yellow")
     elif settingsFile.has_section("LOGIC "+commandName):
         params[commandName+' side-effect'] = True
@@ -407,12 +413,17 @@ def getStatus(commandName, params):
     deviceName = params["device"]
     sectionName = deviceName + " Status"
 
+    device = devices.DeviceByName[deviceName]
     func = devices.Dev[deviceName]["getStatus"]
     if func is not None:
         #print ("getStatus func(%s) is %s" % (type(func),func))
-        retval = func(deviceName,commandName,params)
+        retval = func(device,deviceName,commandName,params)
         if retval is not False:
-            return retval
+            if 'REDIRECT' in retval:
+                (command,deviceName) = retval.split(' ',2)
+                sectionName = deviceName + " Status"
+            else:
+                return retval
     if settingsFile.has_option(sectionName,commandName):
         status = settingsFile.get(sectionName, commandName)
         return status
@@ -458,7 +469,7 @@ def getSensor(sensorName,params):
 
 def start(handler_class=Handler, threads=8, port=8080, listen='0.0.0.0', timeout=20):
     addr = (listen,port)
-    cprint ('\nStarting broadlink-rest server on %s:%s ...' % (listen,port),"green")
+    cprint ('\nStarting RestHome server on %s:%s ...\n' % (listen,port),"yellow")
     sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(addr)
@@ -545,8 +556,15 @@ def readSettingsFile(settingsFile):
     if devices.DevList:
         for devname in devices.DevList:
             device = devices.readSettings(devname)
-            devices.Dev[devname]['Lock'] = threading.RLock()
-            print("Setting %s to Type %s" % (devname,devices.Dev[devname]['Type']))
+            if devices.Dev[devname]['BaseType'] != 'virtual':
+                devtype = devices.Dev[devname]['Type']
+                devices.Dev[devname]['Lock'] = threading.RLock()
+            else:
+                devtype = device.real
+            comment = ''
+            if 'Comment' in devices.Dev[devname]:
+                comment = ' (' + devices.Dev[devname]['Comment'].strip()+')'
+            print("Configured %s%s as %s/%s" % (devname,comment,devices.Dev[devname]['BaseType'],devtype))
             if not devname in devices.DeviceByName:
                 devices.DeviceByName[devname] = device
             #device.hostname = devname
@@ -556,7 +574,7 @@ def readSettingsFile(settingsFile):
                 commandName = devices.Dev[devname]['StartUpCommand']
                 query = {}
                 query["device"] = devname
-                macros.eventList.add("StartUp"+commandName,1,commandName,query)
+                macros.eventList.add("StartUp "+devname,1,commandName,query)
 
     return { "port": serverPort, "listen": listen_address, "threads": MaxThreads, "timeout": GlobalTimeout }
 
@@ -589,7 +607,7 @@ if __name__ == "__main__":
         devices.startUp()
         start(**serverParams)
         if not ShutdownRequested.is_set():
-            time.sleep(18)
+            time.sleep(20)
             cprint ("Reloading configuration ...\n","cyan")
             reloadAll()
     devices.shutDown()
