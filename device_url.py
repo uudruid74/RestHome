@@ -57,7 +57,7 @@ def readSettings(devname):
     if 'Delay' in Dev:
         device.delay = Dev['Delay']
     else:
-        device.delay = 0.0
+        device.delay = 0.25     #- Otherwise you get a Bad Gateway error from IFTTT
 
     Dev['learnCommand'] = None
     Dev['sendCommand'] = sendCommand
@@ -75,12 +75,12 @@ def sendCommand(command,device,deviceName,params):
             URL = macros.expandVariables(device.url,params)
             PostData = json.dumps(params)
             r = requests.post(url = URL, data = PostData)
-            cprint("%s/%s" % (deviceName,r.text),"green")
+            cprint("%s/%s-%s" % (deviceName,params['command'],r.text),"green")
             time.sleep(float(params['deviceDelay']))
             return True
         return False
     except Exception as e:
-        cprint("url sendCommand: %s to %s failed: %s" % (command,deviceName,e),"yellow")
+        cprint("url sendCommand: %s to %s failed: %s" % (params['command'],deviceName,e),"yellow")
         traceback.print_exc()
         return False
 
