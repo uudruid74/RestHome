@@ -26,12 +26,14 @@ import http.server
 
 import device_broadlink
 import device_url
+import device_gpio
 import device_virtual
 
 def reloadAll():
     reload(devices)
     reload(device_broadlink)
     reload(device_url)
+    reload(device_gpio)
     reload(device_virtual)
     reload(settings)
 
@@ -555,7 +557,7 @@ def readSettingsFile(settingsFile):
 
     if devices.DevList:
         for devname in devices.DevList:
-            device = devices.readSettings(devname)
+            device = devices.readSettings(settingsFile,devname)
             if devices.Dev[devname]['BaseType'] != 'virtual':
                 devtype = devices.Dev[devname]['Type']
                 devices.Dev[devname]['Lock'] = threading.RLock()

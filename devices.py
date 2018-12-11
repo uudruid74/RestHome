@@ -30,9 +30,9 @@ def discover (settings,timeout,listen,broadcast):
     for func in FuncDiscover:
         func(settings,timeout,listen,broadcast)
 
-def readSettings (devname):
+def readSettings (settings,devname):
     for func in FuncReadSettings:
-        retvalue = func(devname)
+        retvalue = func(settings,devname)
         if retvalue is not False:
             return retvalue
     cprint ("I don't know the type of device for %s" % devname,"yellow")

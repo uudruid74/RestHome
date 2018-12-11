@@ -26,7 +26,8 @@ for section in settings.sections():
     if section.startswith("LOGIC ") or section.startswith("TRIGGER ") or \
             section.startswith("TEST ") or section.startswith("PING ") or \
             section.startswith("EVENT ") or section.startswith("RADIO") or \
-            section.startswith("WOL ") or section.startswith("SHELL "):
+            section.startswith("WOL ") or section.startswith("SHELL ") or \
+            section.startswith("GPIO "):
         continue
     #- These are devices
     # print(("Configured Device: %s" % section))

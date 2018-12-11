@@ -68,7 +68,7 @@ def discover(settingsFile,timeout,listen,broadcast):
 #- The Type attribute is used to declare what sort of device we need to return
 #- otherwise is only used by the device module (this one)
 
-def readSettings(devname):
+def readSettings(settingsFile,devname):
     try:
         Dev = devices.Dev[devname]
         if Dev['Type'] == 'RM' or Dev['Type'] == 'RM2':

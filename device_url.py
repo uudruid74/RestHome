@@ -44,7 +44,7 @@ def discover(settingsFile,timeout,listen,broadcast):
         settings.restoreSettings()
 
 
-def readSettings(devname):
+def readSettings(settingsFile,devname):
     Dev = devices.Dev[devname]
     if Dev['Type'] == 'URL':
         if 'requests' not in devices.Modlist:
