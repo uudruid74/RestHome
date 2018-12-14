@@ -300,7 +300,7 @@ def sendCommand(commandName,params):
             command = settingsFile.get(serviceName, commandName)
         elif settingsFile.has_option('Commands', commandName):
             command = settingsFile.get('Commands', commandName)
-        elif not isRepeat:
+        if command is False:
             if settingsFile.has_option(serviceName, newCommandName):
                 command = settingsFile.get(serviceName, newCommandName)
                 params['command'] = newCommandName
@@ -314,13 +314,13 @@ def sendCommand(commandName,params):
             result = macros.checkMacros(command,params)
         if result:
             return result
-
-        with devices.Dev[deviceName]['Lock']:
-            send = devices.Dev[deviceName]['sendCommand']
-            if send is not None:
-                result = send(command,device,deviceName,params)
-        if result:
-            return commandName
+        if command is not False and not isRepeat:
+            with devices.Dev[deviceName]['Lock']:
+                send = devices.Dev[deviceName]['sendCommand']
+                if send is not None:
+                    result = send(command,device,deviceName,params)
+            if result:
+                return commandName
         return False
 
 def learnCommand(commandName, params):
