@@ -17,6 +17,10 @@ if settings.has_option('General', 'Timeout'):
     DiscoverTimeout = GlobalTimeout = int(settings.get('General', 'Timeout').strip())
 if settings.has_option('General', 'DiscoverTimeout'):
     DiscoverTimeout = int(settings.get('General','DiscoverTimeout').strip())
+if settings.has_option('General', 'Hostname'):
+    Hostname = settings.get('General','Hostname')
+else:
+    Hostname = 'localhost'
 
 for section in settings.sections():
     #- Special sections, not a device
@@ -74,6 +78,10 @@ for section in settings.sections():
         Dev['Actual'] = settings.get(section,'Actual').strip()
     else:
         Dev['Actual'] = None
+    if settings.has_option(section,'Icons'):
+        Dev['Icons'] = settings.get(section,'Icons').strip()
+    else:
+        Dev['Icons'] = "Generic"
     devices.DevList.append(section.strip())
 
 def backupSettings():
