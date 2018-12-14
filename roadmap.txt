@@ -1,0 +1,11 @@
+
+Just a short outline ...
+ * Add restricted URL commands to facilitate UI support
+ * Add more values in settings for UI commands
+ * Add chromecast device support
+ * Add media stream device support (HTTP streaming)
+ * Add UI device
+    - Converts devices to cards
+    - dashboard via web or cast to chromecast
+    - allow insert of devices/commands/logic
+        * LOGIC is node based for easy GUI control
