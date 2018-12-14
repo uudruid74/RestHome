@@ -274,15 +274,15 @@ def sendCommand(commandName,params):
         params["deviceDelay"] = 0.2
     params["command"] = commandName #- VERY IMPORTANT!
 
-    if commandName is None or type(commandName) is bool:
+    if commandName is None or commandName is False or type(commandName) is bool:
         cprint ("Check your setting.ini for invalid syntax!!","yellow")
         traceback.print_exc()
+        return False
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
         if result:
             return result
-        command = False
-        newCommandName = False
+        command = newCommandName = False
         isRepeat = False
         if 'PRINT' not in commandName and 'MACRO' not in commandName and '>' not in commandName:
             if commandName.endswith("on"):
@@ -316,11 +316,12 @@ def sendCommand(commandName,params):
             return result
 
         with devices.Dev[deviceName]['Lock']:
-            result = devices.Dev[deviceName]['sendCommand'](command,device,deviceName,params)
+            send = devices.Dev[deviceName]['sendCommand']
+            if send is not None:
+                result = send(command,device,deviceName,params)
         if result:
             return commandName
-        return result
-
+        return False
 
 def learnCommand(commandName, params):
     deviceName = params["device"]

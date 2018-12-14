@@ -472,49 +472,53 @@ def execute_event(command,query):
     return False
 
 def execute_logicnode_raw(query):
-    value = getStatus(query["test"],query)
-    newcommand = False
-    if str(value) in query:
-        newcommand = expandVariables(query[str(value)],query)
-    elif value.isnumeric():
-        if value == "1" and "on" in query:
-            newcommand  = expandVariables(query["on"],query)
-            return sendCommand(newcommand,query)
-        elif value == "0" and "off" in query:
-            newcommand = expandVariables(query["off"],query)
-            return sendCommand(newcommand,query)
-        value = float(value)
-        if "compare" in query:
-            compareVar = expandVariables(query["compare"],query)
-            try:
-                compare = float(compareVar)
-            except:
-                compare = float(getStatus(compareVar,query))
-        else:
-            compare = 0
-        newvalue = value - compare
-        if newvalue < 0:
-            if "less" in query:
-                newcommand = expandVariables(query["less"],query)
-            elif "neg" in query:
-                newcommand = expandVariables(query["neg"],query)
-        elif newvalue > 0:
-            if "more" in query:
-                newcommand = expandVariables(query["more"],query)
-            elif "pos" in query:
-                newcommand = expandVariables(query["pos"],query)
-        else:
-            if "equal" in query:
-                newcommand = expandVariables(query["equal"],query)
-            elif "zero" in query:
-                newcommand = expandVariables(query["zero"],query)
-        if newcommand == None:
-            if "else" in query:
-                newcommand = expandVariables(query["else"],query)
+    try:
+        value = getStatus(query["test"],query)
+        newcommand = None
+        if str(value) in query:
+            newcommand = expandVariables(query[str(value)],query)
+        elif value.isnumeric():
+            if value == "1" and "on" in query:
+                newcommand  = expandVariables(query["on"],query)
+                return sendCommand(newcommand,query)
+            elif value == "0" and "off" in query:
+                newcommand = expandVariables(query["off"],query)
+                return sendCommand(newcommand,query)
+            value = float(value)
+            if "compare" in query:
+                compareVar = expandVariables(query["compare"],query)
+                try:
+                    compare = float(compareVar)
+                except:
+                    compare = float(getStatus(compareVar,query))
             else:
-                return False
-        else:
+                compare = 0
+            newvalue = value - compare
+            if newvalue < 0:
+                if "less" in query:
+                    newcommand = expandVariables(query["less"],query)
+                elif "neg" in query:
+                    newcommand = expandVariables(query["neg"],query)
+            elif newvalue > 0:
+                if "more" in query:
+                    newcommand = expandVariables(query["more"],query)
+                elif "pos" in query:
+                    newcommand = expandVariables(query["pos"],query)
+            else:
+                if "equal" in query:
+                    newcommand = expandVariables(query["equal"],query)
+                elif "zero" in query:
+                    newcommand = expandVariables(query["zero"],query)
+            if newcommand is None:
+                if "else" in query:
+                    newcommand = expandVariables(query["else"],query)
+            if newcommand is not None:
+                return sendCommand(newcommand,query)
+    except Exception as e:
+        if "error" in query:
+            newcommand = expandVariables(query['error'],query)
             return sendCommand(newcommand,query)
+        cprint ("LOGIC Failed: %s" %s, "yellow")
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query):
@@ -522,28 +526,18 @@ def execute_logicnode(command,query):
     #cprint (section,"green")
     newcommand = None
     newquery = query.copy()
-    try:
-        newquery['command'] = command
-        if settingsFile.has_option(section,"test"):
-            newquery["test"] = expandVariables(settingsFile.get(section,"test"),query)
-        else:
-            cprint ("LOGIC Failed: A test value is requried","yellow")
-            return
+    newquery['command'] = command
+    if settingsFile.has_option(section,"test"):
+        newquery["test"] = expandVariables(settingsFile.get(section,"test"),query)
+    else:
+        cprint ("LOGIC Failed: A test value is requried","yellow")
+        return
 
-        options = [ "on", "off", "compare", "less", "neg", "more", "pos", "else" ]
-        for var in options:
-            if settingsFile.has_option(section,var):
-                newquery[var] = settingsFile.get(section,var)
-        return execute_logicnode_raw(newquery)
-    except Exception as e:
-        print ("Exception: %s" % e)
-        try:
-            if settingsFile.has_option(section,"error"):
-                newcommand = expandVariables(settingsFile.get(section,"error"),query)
-            return sendCommand(newcommand,query)
-        except Exception as e:
-            traceback.print_exc()
-            cprint ("LOGIC Failed: %s" % e,"yellow")
+    options = [ "on", "off", "compare", "less", "neg", "more", "pos", "else", "error" ]
+    for var in options:
+        if settingsFile.has_option(section,var):
+            newquery[var] = settingsFile.get(section,var)
+    return execute_logicnode_raw(newquery)
 
 def checkConditionals(command,query):
     # print("checkConditions %s" % command)
