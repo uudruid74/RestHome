@@ -9,3 +9,33 @@ Just a short outline ...
     - dashboard via web or cast to chromecast
     - allow insert of devices/commands/logic
         * LOGIC is node based for easy GUI control
+
+ICONS - 
+    UI themes MUST support ..
+        Generic = theme based
+        Light = normally a bulb
+        AC-Outlet = outlet
+        Climate-Control = usually a thermometer
+        IFTTT = a gateway
+
+    UI themes SHOULD support ..
+        Remote-Control
+        Display
+        Speaker
+        AV-Reciever
+        Fan
+        Coffee-Pot
+        Router
+        Server
+        Heater
+        Air-Conditioner
+        IR-Gateway
+        URL
+        Home
+        Bluray
+
+    UI themes CAN have others
+        Any icon not on this list should have a fallback.  Any icon on the
+        SHOULD list should fallback to the MUST list.  Simply list the
+        icons, comma seperated, in order of preference
+
