@@ -44,21 +44,19 @@ def readSettings(settingsFile,devname):
                 if section.startswith("GPIO "):
                     sensorname = section[5:]
                     sensor = device.sensor[sensorname] = type('', (), {})()
-                    sensor.sensorType = st = settingsFile.get(section,"type")
+                    sensor.sensorType = settingsFile.get(section,"type")
                     sensor.gpio = settingsFile.get(section,"gpio")
-                    sensor.poll = poll = settingsFile.get(section,"poll") * 60
-                    sensor.trigger = trigger = settingsFile.get(section, "trigger")
+                    sensor.lastread = False
+                    if settingsFile.has_option(section,"poll"):
+                        sensor.poll = float(settingsFile.get(section,"poll")) * 60
+                    else:
+                        sensor.poll = 300.0       #- 5 minutes
+                    if settingsFile.has_option(section,"trigger"):
+                        sensor.trigger = trigger = settingsFile.get(section, "trigger")
+                        initialparams = {}
+                        initialparams['device'] = devname
+                        macros.eventList.add("POLL_"+devname+"_"+sensorname,2.0,sensor.trigger,initialparams)
                     sensor.lastread = None #- Change this to read the status variable
-
-                #- Note: When this event is popped, the POLL is detected.  We
-                #- do a getSensor on it and then only perform the command if 
-                #- the new value is different from what is saved in the GPIO
-                #- definition.
-                #-
-                #- It's the poll process that checks the sensor.lastread and
-                #- when it changes, writes the Status variable and runs trigger
-
-                #macros.eventList.add("POLL_"+devname+"_"+sensorname,poll,trigger)
         else:
             return False
         ADC.setup();
@@ -74,6 +72,8 @@ def readSettings(settingsFile,devname):
         Dev['setStatus'] = None
         Dev['getSensor'] = getSensor
         Dev['BaseType'] = "gpio"
+        Dev['pollCallback'] = pollCallback
+
         return device
     except Exception as e:
         cprint ("GPIO device support requires Adafruit python module.\npip3 install Adafruit_BBIO", "red")
@@ -82,14 +82,18 @@ def readSettings(settingsFile,devname):
 
 #- We'll use this later to turn on/off GPIO buttons and switches
 #def sendCommand(command,device,deviceName,params):
-def getSensor(device,deviceName,sensorName,params):
-    Dev = devices.Dev[deviceName]
+
+def getSensor(sensorName,params):
+    devicename = params['device']
+    device = devices.DeviceByName[devicename]
+    Dev = devices.Dev[devicename]
     try:
         sensor = device.sensor[sensorName]
-        oldvalue = sensor.lastread
-        sensor.lastread = False
         if sensor.sensorType.startswith("temp"):
-            reading = ADC.read(sensor.gpio)
+            reading1 = ADC.read(sensor.gpio)
+            time.sleep(0.5)
+            reading2 = ADC.read(sensor.gpio)
+            reading = (reading1+reading2)/2
             millivolts = reading * 1800  # 1.8V reference = 1800 mV
             temp_c = (millivolts - 500) / 10
             if sensor.sensorType == "tempC":
@@ -97,13 +101,27 @@ def getSensor(device,deviceName,sensorName,params):
             elif sensor.sensorType == "tempF":
                 tempF = (temp_c * 9/5) + 32
                 sensor.lastread = tempF
-        if oldvalue is False or oldvalue is None:
-            oldvalue = sensor.lastread
-        return round((sensor.lastread+oldvalue)/2)
+        value = round(sensor.lastread)
+        params['value'] = value
+        return value
     except Exception as e:
-        cprint ("Error finding sensor %s in %s: %s" % (sensorName,deviceName,e),"yellow")
+        cprint ("Error finding sensor %s in %s: %s" % (sensorName,devicename,e),"yellow")
         traceback.print_exc()
     return False
+
+
+# Polling is an event named "POLL_devicename_argname"
+def pollCallback(devicename,argname,command,params):
+    device = devices.DeviceByName[devicename]
+    sensor = device.sensor[argname]
+    oldvalue = sensor.lastread
+    newvalue = getSensor(argname,params)
+    macros.eventList.add("POLL_"+devicename+"_"+argname,sensor.poll,sensor.trigger,params)
+
+    if oldvalue != newvalue:
+        return newvalue
+    else:
+        return False
 
 
 devices.addDiscover(discover)

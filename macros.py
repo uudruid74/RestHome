@@ -8,6 +8,7 @@ import subprocess
 import json
 import threading
 import sys
+import traceback
 
 def append(a,b):
     if a.strip() == '':
@@ -114,17 +115,18 @@ eventList = EventList()
 #-
 def expandVariables(commandString,query):
     statusVar = commandString.find("$status(")
+    newquery = query.copy()
     while statusVar > -1:
         endVar = commandString.find(")",statusVar)
         if endVar < 0:
             cprint ("No END Parenthesis found in $status variable","yellow")
             statusVar = -1
         varname = commandString[statusVar+8:endVar]
-        varvalue = getStatus(varname,query)
+        varvalue = getStatus(varname,newquery)
         commandString = commandString.replace(commandString[statusVar:endVar+1],varvalue)
         statusVar = commandString.find("$status(")
     firstPass = commandString
-    secondPass = string.Template(firstPass).substitute(query)
+    secondPass = string.Template(firstPass).substitute(newquery)
     return secondPass
 
 def parenSplit(parenstring):
@@ -171,8 +173,12 @@ def cancelEvent(variable):
     return
 
 #- return True if it's a MACRO = stops execution of command!
-def checkMacros(commandFromSettings,query):
-    #print ("checkMacros %s" % commandFromSettings)
+def checkMacros(OcommandFromSettings,query):
+    if OcommandFromSettings.startswith('>'):
+        commandFromSettings = OcommandFromSettings[1:]
+    else:
+        commandFromSettings = OcommandFromSettings
+
     if commandFromSettings.startswith("PRINT "):
         cprint (expandVariables(commandFromSettings[6:],query),"white")
         return True
@@ -213,7 +219,7 @@ def checkMacros(commandFromSettings,query):
         device = commandFromSettings[2:].strip()
         relayTo(device,query)
         return True
-    elif commandFromSettings.startswith("MACRO ") or commandFromSettings.startswith(">") or '(' in commandFromSettings:
+    elif commandFromSettings.startswith("MACRO ") or OcommandFromSettings.startswith(">") or '(' in commandFromSettings:
         if 'serialize' in query and query['serialize']:
             exec_macro(commandFromSettings,query)
         else:
@@ -224,7 +230,6 @@ def checkMacros(commandFromSettings,query):
 
 
 def exec_macro(commandFromSettings,query):
-    #print ("Exec Macro: %s" % commandFromSettings)
     if commandFromSettings.startswith("MACRO "):
         expandedCommand = expandVariables(commandFromSettings[6:],query)
     elif commandFromSettings.startswith(">"):
@@ -250,7 +255,11 @@ def exec_macro(commandFromSettings,query):
                 paramString = command[command.find("(")+1:command.rfind(")")]
                 command = command[:command.find("(")]
                 if command == "set":
-                    setStatus(paramString,"1",newquery)
+                    if ',' in paramString:
+                        (paramString,value) = paramString.split(',')
+                    else:
+                        value = "1"
+                    setStatus(paramString,value,newquery)
                 elif command == "clear":
                     setStatus(paramString,"0",newquery)
                 elif command == "sleep":
@@ -392,7 +401,7 @@ def ping(host):
 
 def execute_ping(command,query):
     section = "PING "+command
-    #cprint (section,"green")
+    cprint (section,"green")
     try:
         host = expandVariables(settingsFile.get(section,"host"),query)
         if ping(host):
@@ -464,6 +473,7 @@ def execute_event(command,query):
 
 def execute_logicnode_raw(query):
     value = getStatus(query["test"],query)
+    newcommand = False
     if str(value) in query:
         newcommand = expandVariables(query[str(value)],query)
     elif value.isnumeric():
@@ -476,7 +486,10 @@ def execute_logicnode_raw(query):
         value = float(value)
         if "compare" in query:
             compareVar = expandVariables(query["compare"],query)
-            compare = float(getStatus(compareVar,query))
+            try:
+                compare = float(compareVar)
+            except:
+                compare = float(getStatus(compareVar,query))
         else:
             compare = 0
         newvalue = value - compare
@@ -514,7 +527,8 @@ def execute_logicnode(command,query):
         if settingsFile.has_option(section,"test"):
             newquery["test"] = expandVariables(settingsFile.get(section,"test"),query)
         else:
-            return False    #- test value required
+            cprint ("LOGIC Failed: A test value is requried","yellow")
+            return
 
         options = [ "on", "off", "compare", "less", "neg", "more", "pos", "else" ]
         for var in options:
@@ -522,14 +536,14 @@ def execute_logicnode(command,query):
                 newquery[var] = settingsFile.get(section,var)
         return execute_logicnode_raw(newquery)
     except Exception as e:
-        # print ("Exception: %s" % e)
+        print ("Exception: %s" % e)
         try:
             if settingsFile.has_option(section,"error"):
                 newcommand = expandVariables(settingsFile.get(section,"error"),query)
             return sendCommand(newcommand,query)
         except Exception as e:
+            traceback.print_exc()
             cprint ("LOGIC Failed: %s" % e,"yellow")
-        return False
 
 def checkConditionals(command,query):
     # print("checkConditions %s" % command)

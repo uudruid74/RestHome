@@ -77,6 +77,8 @@ try:
                 return 'REDIRECT %s' % device.real
             if 'getStatus' in Dev and Dev['getStatus'] is not None:
                 return Dev['getStatus'](realdevice,deviceName,commandName,params)
+        else:
+            print ("No such device: %s real: %s" % (deviceName,device.real))
         return False
 
 
@@ -91,14 +93,14 @@ try:
                 return Dev['setStatus'](realdevice,deviceName,commandName,params,old,new)
         return False
 
-    def getSensor(device,deviceName,sensorName,params):
+    def getSensor(sensorName,params):
         if device.real in devices.DeviceByName:
             realdevice = devices.DeviceByName[device.real]
             Dev = devices.Dev[device.real]
             if 'deviceDelay' not in params:
                 params['deviceDelay'] = realdevice.delay
             if 'getSensor' in Dev and Dev['getSensor'] is not None:
-                return Dev['getSensor'](device,deviceName,sensorName,params)
+                return Dev['getSensor'](sensorName,params)
         return False
 
     devices.addReadSettings(readSettings)

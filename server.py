@@ -62,7 +62,14 @@ class Thread(threading.Thread):
             while timer < 1:
                 event = macros.eventList.pop()
                 cprint ("EVENT (%s) %s" % (datetime.datetime.now().strftime("%I:%M:%S"),event.name),"blue")
-                sendCommand(event.command,event.params)
+                if event.name.startswith("POLL_"):
+                    (POLL,devicename,argname) = event.name.split('_')
+                    value = devices.Dev[devicename]["pollCallback"](devicename,argname,event.command,event.params)
+                    if value is not False:
+                        setStatus(argname,str(value),event.params)
+                        sendCommand(event.command,event.params)
+                else:
+                    sendCommand(event.command,event.params)
                 print ('')
                 timer = min(self.timeout,macros.eventList.nextEvent())
             httpd.timeout = timer
@@ -267,11 +274,13 @@ def sendCommand(commandName,params):
         params["deviceDelay"] = 0.2
     params["command"] = commandName #- VERY IMPORTANT!
 
+    if commandName is None or type(commandName) is bool:
+        cprint ("Check your setting.ini for invalid syntax!!","yellow")
+        traceback.print_exc()
     if commandName.strip() != '':
         result = macros.checkConditionals(commandName,params)
         if result:
             return result
-
         command = False
         newCommandName = False
         isRepeat = False
@@ -291,8 +300,7 @@ def sendCommand(commandName,params):
             command = settingsFile.get(serviceName, commandName)
         elif settingsFile.has_option('Commands', commandName):
             command = settingsFile.get('Commands', commandName)
-
-        if not isRepeat:
+        elif not isRepeat:
             if settingsFile.has_option(serviceName, newCommandName):
                 command = settingsFile.get(serviceName, newCommandName)
                 params['command'] = newCommandName
@@ -353,10 +361,15 @@ def learnCommand(commandName, params):
 #- instead with on/off appended or pass a parameter.  Use setStatus for
 #- setting variables.
 def setStatus(commandName, status, params):
-    deviceName = params["device"]
-    sectionName = 'Status'          #- Where the variables are stored
+    if '/' in commandName:
+        (deviceName,commandName) = commandName.split('/')
+    else:
+        deviceName = params["device"]
     if 'globalVariable' not in params or params['globalVariable'] != commandName:
         sectionName = deviceName + " Status"
+    else:
+        sectionName = 'Status'          #- Where the variables are stored
+
     #print ("setStatus command = %s status = %s devicename = %s section = %s" % (commandName, status, deviceName, sectionName))
     settings.backupSettings()
     oldvalue = getStatus(commandName,params)
@@ -384,7 +397,7 @@ def setStatus(commandName, status, params):
         cprint ("Error writing settings file: %s" % e,"yellow")
         traceback.print_exc()
         settings.restoreSettings()
-        return False
+        return oldvalue
     if settingsFile.has_section(section):
         params['value'] = status
         params['oldvalue'] = oldvalue
@@ -412,7 +425,10 @@ def setStatus(commandName, status, params):
 
 #- Use getStatus to read variables, either from the settings file or device
 def getStatus(commandName, params):
-    deviceName = params["device"]
+    if '/' in commandName:
+        (deviceName,commandName) = commandName.split('/')
+    else:
+        deviceName = params["device"]
     sectionName = deviceName + " Status"
 
     device = devices.DeviceByName[deviceName]
@@ -434,12 +450,8 @@ def getStatus(commandName, params):
         params["globalVariable"] = commandName
         if status:
             return status
-    status = getSensor(commandName,params)
-    if status:
-        return status
-    else:
-        print ("Can't find %s %s" % (sectionName, commandName))
-        return "Fail"
+    print ("Can't find %s %s" % (sectionName, commandName))
+    return "0"
 
 
 def toggleStatus(commandName, params):
@@ -456,16 +468,11 @@ def toggleStatus(commandName, params):
 
 
 def getSensor(sensorName,params):
-    deviceName = params["device"]
-    if deviceName in devices.DeviceByName:
-        device = devices.DeviceByName[deviceName]
-    else:
-        return "Failed: No such device, %s" % deviceName
-
+    deviceName = params['device']
     with devices.Dev[deviceName]['Lock']:
         func = devices.Dev[deviceName]["getSensor"]
         if func is not None:
-            return func(device,deviceName,sensorName,params)
+            return func(sensorName,params)
     return False
 
 

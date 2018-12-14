@@ -148,6 +148,7 @@ def sendCommand(command,device,deviceName,params):
             command = params['command']
             e = "command is undefined"
         cprint("broadlink sendCommand: %s to %s failed: %s" % (command,deviceName,e),"yellow")
+        traceback.print_exc()
         return False
     try:
         device.send_data(finalCommand)
@@ -166,7 +167,9 @@ def sendCommand(command,device,deviceName,params):
 
 #    def setStatus:
 
-def getSensor(device,deviceName,sensorName,params):
+def getSensor(sensorName,params):
+    deviceName = params['device']
+    device = devices.DeviceByName[deviceName]
     Dev = devices.Dev[deviceName]
     try:
         # print ("Checking sensors %s %s" % (sensorName,deviceName))
