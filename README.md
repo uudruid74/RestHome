@@ -14,12 +14,12 @@ Real PDF Documentation (source is in LyX) on the programming options is underway
 
 System Features
 ---------------
-- **Multithreaded**     Responsive, handles multiple clients, programmable events and timers
-- **Programmable**      Macro Language contains variables, loops, conditions, and shell integration
-- **IFTTT Integration** Send or Recieve commands from IFTTT to control anything IFTTT can control
-- **Virtual Devices**   A single broadlink can control multiple virtual devices
-- **Chromecast**        Integrated Chromecast functions are COMING SOON!
-- **Fast Learning**     No more waiting 20 seconds to learn every command!
+- ** Multithreaded      **  Responsive, handles multiple clients, programmable events and timers
+- ** Programmable       **  Macro Language contains variables, loops, conditions, and shell integration
+- ** IFTTT Integration  **  Send or Recieve commands from IFTTT to control anything IFTTT can control
+- ** Virtual Devices    **  A single broadlink can control multiple virtual devices
+- ** Chromecast         **  Integrated Chromecast functions are COMING SOON!
+- ** Fast Learning      **  No more waiting 20 seconds to learn every command!
 
 
 Example usage
@@ -41,6 +41,7 @@ The [General] section contains the following optional parameters
 - **restrictAccess** = restrict all operations to this list of IPs
 - **password** = allow password-protected POST operations from any address
 - **MaxThreads** = maximum number of processing threads, defaults to 8
+- **Hostname** = remote hostname for forming URLs in local media and UI tools
 
 If _password_ is specified, then GET operations are only allowed from hosts in _restrictAccess_.  GET operations won't need a password, but they'll only be allowed from specific hosts.  There is currently no way to restrict hosts AND require a password, but _serverAddress_ combined with firewall rules on the underlying host would be solution for the security paranoid, setting _password_ and not _restrictAccess_.
 
@@ -62,10 +63,51 @@ http://localhost:8080/deviceName/sendCommand/lampon # automatically set status o
 http://localhost:8080/deviceName/getStatus/lamp     # return lamp status as 0 or 1
 ```
 
-5) Check pending events
+5) Check pending events (client must be on the restrictAccess list)
 ```
 http://localhost:8080/listEvents                    # list all pending events
 ```
+Response:
+```
+{
+        "ok": "eventList"
+        "104": "POLL_BeagleBone_temp = thermostat"
+        "3404": "fetchTempLoop = >fetchTemp fetchTempLoop"
+}
+```
 
-6) Check the PDF documentation on how to program loops, conditionals, and integrate with IFTTT, etc
+6) List Devices (client must be on the restrictAccess list)
+```
+http://localhost:8080/listDevices
+```
+Response:
+```
+{
+        "ok": "deviceList"
+        "Fireplace": "Duraflame Heater"
+        "Alice": "Vizio SmartCast TV"
+        "LivingRoom-BlackBean": "LivingRoom-BlackBean"
+        "AV": "Sony DH770 AV Reciever"
+        "AC": "GREE Air Conditioner"
+        "default": "Unknown"
+        "IFTTT": "IFTTT"
+        "LG": "Ultra Blueray Player"
+        "BeagleBone": "On-board GPIO Pins"
+        "StrayScampsDen": "Entire House"
+}
+```
+
+7) List Status Variables (client must be on the restrictAccess list)
+```
+http://localhost:8080/BeagleBone/listStatus
+```
+Response:
+```
+{
+        "ok": "BeagleBone Status"
+        "temp": "70"
+}
+```
+
+8) Check the PDF documentation on how to program loops, conditionals, and integrate with IFTTT, etc
 
