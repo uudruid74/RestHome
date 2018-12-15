@@ -66,11 +66,8 @@ class Thread(threading.Thread):
                     (POLL,devicename,argname) = event.name.split('_')
                     value = devices.Dev[devicename]["pollCallback"](devicename,argname,event.command,event.params)
                     if value is not False:
-                        print ("executing " + event.command)
                         setStatus(argname,str(value),event.params)
                         sendCommand(event.command,event.params)
-                    else:
-                        print ("No change detected")
                 else:
                     sendCommand(event.command,event.params)
                 print ('')
