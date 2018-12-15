@@ -27,6 +27,7 @@ try:
                 return False
             Real = devices.Dev[device.real].copy()
             del Real['StartUpCommand']
+            del Real['Comment']
             Dev.update(Real)
         else:
             return False

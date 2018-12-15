@@ -34,7 +34,7 @@ for section in settings.sections():
             section.startswith("GPIO "):
         continue
     #- These are devices
-    # print(("Configured Device: %s" % section))
+    #print(("Configured Device: [%s]" % section))
     Dev = devices.Dev[section] = {}
     if devices.Dev['default'] == None:
         devices.Dev['default'] = section
@@ -53,14 +53,12 @@ for section in settings.sections():
     else:
         Dev['Timeout'] = 6
     if settings.has_option(section,'Comment'):
-        Dev['Comment'] = settings.get(section,'Comment')
+        Dev['Comment'] = settings.get(section,'Comment').strip()
+    else:
+        Dev['Comment'] = section
     if settings.has_option(section,'Delay'):
         Dev['Delay'] = float(settings.get(section, 'Delay').strip())
     #print '''Setting "%s" delay to "%s"''' % (section,Dev[section,'Delay'])
-    if settings.has_option(section,'skipRepeats'):
-        Dev['skipRepeats'] = bool(settings.get(section, 'skipRepeats'))
-    else:
-        Dev['skipRepeats'] = True
     if settings.has_option(section,'Device'):
         Dev['Device'] = int(settings.get(section, 'Device').strip(),16)
     else:

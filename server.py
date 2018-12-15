@@ -223,7 +223,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 response = "Failed: Unknown command - %s" % commandName
 
         elif 'listEvents' in self.path:
+            if RestrictAccess and self.client_address[0] not in RestrictAccess:
+                return self.access_denied()
             response = macros.eventList.dump()
+
+        elif 'listDevices' in self.path:
+            if RestrictAccess and self.client_address[0] not in RestrictAccess:
+                return self.access_denied()
+            response = devices.dumpDevices()
+
+        elif 'listStatus' in self.path:
+            if RestrictAccess and self.client_address[0] not in RestrictAccess:
+                return self.access_denied()
+            if paths[2] == 'listStatus':
+                section = paths[1] + " Status"
+            else:
+                section = "Status"
+            response = '''{\n\t"ok": "%s"\n''' % section
+            for var in settingsFile.options(section):
+                response += '''\t"%s": "%s"\n''' % (var,settingsFile.get(section,var))
+            response += '''}'''
 
         elif 'deleteEvent' in self.path:
             if paths[2] == 'deleteEvent':
@@ -252,11 +271,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             response = "Failed"
         if "Failed" in response or "error" in response:
-            self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
+            self.wfile.write(bytes('''{ "error": "%s" }\n''' % response,'utf-8'))
         elif response.startswith('{'):
-            self.wfile.write(bytes(response,'utf-8'))
+            self.wfile.write(bytes(response+"\n",'utf-8'))
         else:
-            self.wfile.write(bytes('''{ "ok": "%s" }''' % response,'utf-8'))
+            self.wfile.write(bytes('''{ "ok": "%s" }\n''' % response,'utf-8'))
         cprint ("\t"+response,"white")
         print("")
 
@@ -314,7 +333,7 @@ def sendCommand(commandName,params):
             result = macros.checkMacros(command,params)
         if result:
             return result
-        if command is not False and not isRepeat:
+        if not isRepeat:
             with devices.Dev[deviceName]['Lock']:
                 send = devices.Dev[deviceName]['sendCommand']
                 if send is not None:
@@ -342,19 +361,20 @@ def learnCommand(commandName, params):
         cprint ("Waiting %d seconds to capture command" % GlobalTimeout,"magenta")
 
         decodedCommand = devices.Dev[deviceName]['learnCommand'](deviceName,device,params)
-        settings.backupSettings()
-        try:
-            ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
-            if not settingsFile.has_section(sectionName):
-                settingsFile.add_section(sectionName)
-            settingsFile.set(sectionName, commandName, str(decodedCommand,'utf8'))
-            settingsFile.write(ControlIniFile)
-            ControlIniFile.close()
-            return commandName
-        except Exception as e:
-            cprint("Error writing settings file: %s" % e,"yellow")
-            traceback.print_exc()
-            settings.restoreSettings()
+        with devices.SettingsLock:
+            settings.backupSettings()
+            try:
+                ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
+                if not settingsFile.has_section(sectionName):
+                    settingsFile.add_section(sectionName)
+                settingsFile.set(sectionName, commandName, str(decodedCommand,'utf8'))
+                settingsFile.write(ControlIniFile)
+                ControlIniFile.close()
+                return commandName
+            except Exception as e:
+                cprint("Error writing settings file: %s" % e,"yellow")
+                traceback.print_exc()
+                settings.restoreSettings()
     return False
 
 
@@ -388,12 +408,13 @@ def setStatus(commandName, status, params):
     if func is not None:
         retval = func(deviceName,commandName,params,oldvalue,status)
     try:
-        if not settingsFile.has_section(sectionName):
-            settingsFile.add_section(sectionName)
-        ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
-        settingsFile.set(sectionName, commandName, str(status))
-        settingsFile.write(ControlIniFile)
-        ControlIniFile.close()
+        with devices.SettingsLock:
+            if not settingsFile.has_section(sectionName):
+                settingsFile.add_section(sectionName)
+            ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
+            settingsFile.set(sectionName, commandName, str(status))
+            settingsFile.write(ControlIniFile)
+            ControlIniFile.close()
     except Exception as e:
         cprint ("Error writing settings file: %s" % e,"yellow")
         traceback.print_exc()
@@ -508,7 +529,8 @@ def readSettingsFile(settingsFile):
     broadcast_address = '255.255.255.255'
 
     settingsFile.optionxform = str
-    settingsFile.read(settings.settingsINI)
+    with devices.SettingsLock:
+        settingsFile.read(settings.settingsINI)
 
     GlobalTimeout = settings.GlobalTimeout
     DiscoverTimeout = settings.DiscoverTimeout
@@ -571,9 +593,11 @@ def readSettingsFile(settingsFile):
                 devices.Dev[devname]['Lock'] = threading.RLock()
             else:
                 devtype = device.real
-            comment = ''
+
             if 'Comment' in devices.Dev[devname]:
                 comment = ' (' + devices.Dev[devname]['Comment'].strip()+')'
+            else:
+                comment = ''
             print("Configured %s%s as %s/%s" % (devname,comment,devices.Dev[devname]['BaseType'],devtype))
             if not devname in devices.DeviceByName:
                 devices.DeviceByName[devname] = device

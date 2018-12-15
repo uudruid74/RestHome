@@ -100,12 +100,13 @@ class EventList(object):
             return None
     def dump(self):
         now = time.time()
-        retval = '''{ "ok": "eventList" }\n'''
+        retval = '''{\n\t"ok": "eventList"\n'''
         with self.lock:
             node = self.begin
             while node != None:
-                retval += '''{ "%s": "%s" }\n''' % (int(node.timestamp - now), node.name + " = " + node.command)
+                retval += '''\t"%s": "%s"\n''' % (int(node.timestamp - now), node.name + " = " + node.command)
                 node = node.nextNode
+        retval += '''}'''
         return retval
 
 eventList = EventList()
