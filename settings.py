@@ -28,7 +28,7 @@ for section in settings.sections():
         continue
     #- Special sections, control nodes
     if section.startswith("LOGIC ") or section.startswith("TRIGGER ") or \
-            section.startswith("TEST ") or section.startswith("PING ") or \
+            section.startswith("PING ") or \
             section.startswith("EVENT ") or section.startswith("RADIO") or \
             section.startswith("WOL ") or section.startswith("SHELL ") or \
             section.startswith("GPIO "):
