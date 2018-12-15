@@ -388,6 +388,9 @@ def execute_radio(command,query):
     #cprint (section,"green")
     status = getStatus(command,query)
     try:
+        if settingsFile.has_option(section,'device'):
+            query = query.copy()
+            query['device'] = settingsFile.get(section,'device')
         newstatus = query["button"]
         if (status == newstatus):
             cprint ("RADIO button %s already at state = %s" % (command,status),"cyan")
@@ -430,10 +433,8 @@ def execute_event(command,query):
     try:
         newquery = query.copy()
         newquery['command'] = settingsFile.get(section,"command")
-        options = [ "seconds", "minutes", "hours" ]
-        for option in options:
-            if settingsFile.has_option(section,option):
-                newquery[option] = settingsFile.get(section,option)
+        for option in settingsFile.options(section):
+            newquery[option] = settingsFile.get(section,option)
         return execute_event_raw(command,newquery)
     except Exception as e:
         cprint ("EVENT Failed: %s" % e,"yellow")
@@ -501,11 +502,8 @@ def execute_logicnode(command,query):
     else:
         cprint ("LOGIC Failed: A test value is required","yellow")
         return
-
-    options = [ "on", "off", "compare", "less", "neg", "more", "pos", "else", "error" ]
-    for var in options:
-        if settingsFile.has_option(section,var):
-            newquery[var] = settingsFile.get(section,var)
+    for var in settingsFile.options(section):
+        newquery[var] = settingsFile.get(section,var)
     return execute_logicnode_raw(newquery)
 
 def checkConditionals(command,query):
