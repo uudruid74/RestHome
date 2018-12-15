@@ -61,13 +61,16 @@ class Thread(threading.Thread):
             timer = min(self.timeout,macros.eventList.nextEvent())
             while timer < 1:
                 event = macros.eventList.pop()
-                cprint ("EVENT (%s) %s" % (datetime.datetime.now().strftime("%I:%M:%S"),event.name),"blue")
+                cprint ("EVENT (%s) %s/%s" % (datetime.datetime.now().strftime("%I:%M:%S"),event.params['device'],event.name),"blue")
                 if event.name.startswith("POLL_"):
                     (POLL,devicename,argname) = event.name.split('_')
                     value = devices.Dev[devicename]["pollCallback"](devicename,argname,event.command,event.params)
                     if value is not False:
+                        print ("executing " + event.command)
                         setStatus(argname,str(value),event.params)
                         sendCommand(event.command,event.params)
+                    else:
+                        print ("No change detected")
                 else:
                     sendCommand(event.command,event.params)
                 print ('')
@@ -281,7 +284,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def sendCommand(commandName,params):
-    deviceName = params['device']
+    if commandName.startswith('.') or commandName.startswith('MACRO'):
+        return macros.checkMacros(commandName,params)
+    if '/' in commandName:
+        (deviceName,commandName) = commandName.split('/')
+        params = params.copy()
+        params['device'] = deviceName
+    else:
+        deviceName = params['device']
     if deviceName in devices.DeviceByName:
         device = devices.DeviceByName[deviceName]
         serviceName = deviceName + ' Commands'
@@ -303,7 +313,7 @@ def sendCommand(commandName,params):
             return result
         command = newCommandName = False
         isRepeat = False
-        if 'PRINT' not in commandName and 'MACRO' not in commandName and '>' not in commandName:
+        if 'PRINT' not in commandName and 'MACRO' not in commandName and '.' not in commandName:
             if commandName.endswith("on"):
                 newCommandName = commandName[:-2]
                 params[commandName + ' side-effect'] = True
@@ -384,6 +394,8 @@ def learnCommand(commandName, params):
 def setStatus(commandName, status, params):
     if '/' in commandName:
         (deviceName,commandName) = commandName.split('/')
+        params = params.copy()
+        params['device'] = deviceName
     else:
         deviceName = params["device"]
     if 'globalVariable' not in params or params['globalVariable'] != commandName:
@@ -396,11 +408,11 @@ def setStatus(commandName, status, params):
     oldvalue = getStatus(commandName,params)
     section = "TRIGGER " + commandName  #- Where trigger commands are stored
     if oldvalue == status:
-        default= "Value of %s not changed: %s" % (commandName, status)
+        default= "Value of %s/%s not changed: %s" % (deviceName,commandName, status)
         if settingsFile.has_option(section, "nop"):
             rawcommand = settingsFile.get(section,"nop")
         else:
-            rawcommand = "PRINT %s" % default
+            rawcommand = ".PRINT %s" % default
         macros.eventList.add("%s-NOP" % commandName,0,rawcommand,params)
         params[commandName+' side-effect'] = True
         return oldvalue
@@ -449,6 +461,8 @@ def setStatus(commandName, status, params):
 def getStatus(commandName, params):
     if '/' in commandName:
         (deviceName,commandName) = commandName.split('/')
+        params = params.copy()
+        params['device'] = deviceName
     else:
         deviceName = params["device"]
     sectionName = deviceName + " Status"
@@ -490,7 +504,12 @@ def toggleStatus(commandName, params):
 
 
 def getSensor(sensorName,params):
-    deviceName = params['device']
+    if '/' in sensorName:
+        (deviceName,sensorName) = sensorName.split('/')
+        params = params.copy()
+        params['device'] = deviceName
+    else:
+        deviceName = params['device']
     with devices.Dev[deviceName]['Lock']:
         func = devices.Dev[deviceName]["getSensor"]
         if func is not None:
@@ -500,7 +519,11 @@ def getSensor(sensorName,params):
 
 def start(handler_class=Handler, threads=8, port=8080, listen='0.0.0.0', timeout=20):
     addr = (listen,port)
-    cprint ('\nStarting RestHome server on %s:%s ...\n' % (listen,port),"yellow")
+    if settings.Hostname == "localhost":
+        name=''
+    else:
+        name = settings.Hostname + " "
+    cprint ('\nStarting RestHome server %son %s:%s ...\n' % (name,listen,port),"yellow")
     sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(addr)

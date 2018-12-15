@@ -175,7 +175,7 @@ def cancelEvent(variable):
 
 #- return True if it's a MACRO = stops execution of command!
 def checkMacros(OcommandFromSettings,query):
-    if OcommandFromSettings.startswith('>'):
+    if OcommandFromSettings.startswith('.'):
         commandFromSettings = OcommandFromSettings[1:]
     else:
         commandFromSettings = OcommandFromSettings
@@ -220,7 +220,7 @@ def checkMacros(OcommandFromSettings,query):
         device = commandFromSettings[2:].strip()
         relayTo(device,query)
         return True
-    elif commandFromSettings.startswith("MACRO ") or OcommandFromSettings.startswith(">") or '(' in commandFromSettings:
+    elif commandFromSettings.startswith("MACRO ") or OcommandFromSettings.startswith(".") or '(' in commandFromSettings:
         if 'serialize' in query and query['serialize']:
             exec_macro(commandFromSettings,query)
         else:
@@ -233,7 +233,7 @@ def checkMacros(OcommandFromSettings,query):
 def exec_macro(commandFromSettings,query):
     if commandFromSettings.startswith("MACRO "):
         expandedCommand = expandVariables(commandFromSettings[6:],query)
-    elif commandFromSettings.startswith(">"):
+    elif commandFromSettings.startswith("."):
         expandedCommand = expandVariables(commandFromSettings[1:],query)
     else:
         expandedCommand = expandVariables(commandFromSettings,query)
@@ -246,10 +246,6 @@ def exec_macro(commandFromSettings,query):
         if command == "sleep":
             time.sleep(1)
             continue
-
-        if '/' in command:
-            (device,command) = command.strip().split('/')
-            newquery['device'] = device
 
         if "(" in command:
             for command in parenSplit(command):
@@ -276,6 +272,8 @@ def exec_macro(commandFromSettings,query):
                     decrementVar(paramString)
                 elif command == "cancel":
                     cancelEvent(paramString)
+                elif command == "print":
+                    cprint (expandVariables(getStatus(paramString,query),query),"white")
                 elif command.startswith('timer'):
                     minutes = "0" + command[5:]
                     seconds = float(minutes) * 60 + query['deviceDelay']
@@ -287,8 +285,6 @@ def exec_macro(commandFromSettings,query):
                         newquery[pair[0]] = pair[1]
                     if command == "logic":
                         execute_logicnode_raw(newquery)
-                    elif command == "test":
-                        execute_test_raw(newquery)
                     elif command == "event":
                         execute_event_raw("event-"+time.time(),newquery)
                     else:
@@ -322,35 +318,6 @@ def execute_wol(command,query):
         return wol.wake(mac,ip,port)
     except Exception as e:
         cprint ("WOL Failed: %s" % e,"yellow")
-    return False
-
-#- Test a variable for true/false
-def execute_test_raw(command,query):
-    try:
-        valueToTest = expandVariables(query['value'],query)
-        value = getStatus(valueToTest,query)
-        if value == "1":
-            rawcommand = query['on']
-        else:
-            rawcommand = query['off']
-        return sendCommand(rawcommand,query)
-    except Exception as e:
-        cprint ("TEST Failed: %s" % e,"yellow")
-    return False
-
-def execute_test(command,query):
-    section = "TEST "+command
-    #cprint (section,"green")
-    try:
-        newquery = query.copy()
-        newquery['test'] = settingsFile.get(section,"value")
-        if settingsFile.has_option(section,"on"):
-            newquery['on'] = settingsFile.get(section,"on")
-        if settingsFile.has_option(section,"off"):
-            newquery['off'] = settingsFile.get(section,"off")
-        return execute_test_raw(rawcommand,newquery)
-    except Exception as e:
-        cprint ("TEST Failed: %s" % e,"yellow")
     return False
 
 #- Execute shell command, short MACRO version
@@ -423,7 +390,7 @@ def execute_radio(command,query):
     try:
         newstatus = query["button"]
         if (status == newstatus):
-            cprint ("RADIO button already at state = %s" % status,"cyan")
+            cprint ("RADIO button %s already at state = %s" % (command,status),"cyan")
             return status
         else:
             off = "button" + status + "off"
@@ -439,7 +406,7 @@ def execute_radio(command,query):
                     sendCommand(onCommand,query)
             setStatus(command,newstatus,query)
     except Exception as e:
-        cprint ("RADIO Failed: %s" % e,"yellow")
+        cprint ("RADIO %s Failed: %s" % (command,e),"yellow")
     return status
 
 def execute_event_raw(command,query):
@@ -519,7 +486,8 @@ def execute_logicnode_raw(query):
         if "error" in query:
             newcommand = expandVariables(query['error'],query)
             return sendCommand(newcommand,query)
-        cprint ("LOGIC Failed: %s" %s, "yellow")
+        cprint ("LOGIC Failed: %s" % e, "yellow")
+        traceback.print_exc()
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query):
@@ -531,7 +499,7 @@ def execute_logicnode(command,query):
     if settingsFile.has_option(section,"test"):
         newquery["test"] = expandVariables(settingsFile.get(section,"test"),query)
     else:
-        cprint ("LOGIC Failed: A test value is requried","yellow")
+        cprint ("LOGIC Failed: A test value is required","yellow")
         return
 
     options = [ "on", "off", "compare", "less", "neg", "more", "pos", "else", "error" ]
@@ -544,8 +512,6 @@ def checkConditionals(command,query):
     # print("checkConditions %s" % command)
     if settingsFile.has_section("LOGIC "+command):
         return execute_logicnode(command,query)
-    elif settingsFile.has_section("TEST "+command):
-        return execute_test(command,query)
     elif settingsFile.has_section("PING "+command):
         return execute_ping(command,query)
     elif settingsFile.has_section("WOL "+command):
