@@ -23,25 +23,26 @@ right value you may use an instruction such as:
     TOGGLE  And a single variable to set to toggle, reports new value
     MACRO   Followed by a list of commands.  Any command may be followed by
             a comma and a repeat count.  You may also use the virtual "sleep"
-            commands (sleep, sleep2, sleep3, etc) to pause for a set number
+            commands (Ex: sleep(4) ) to pause for a set number
             of seconds.  The list is space separated.  Add parameters in
             parenthesis and the given parameter is set before running the
-            command.
+            command. You may use '.' as a shorthand for 'MACRO'
     SH      Short shell command to run, $param substitution is done
             WARNING!  $parameters are passed directly to the OS!  However,
             shell expansions and such are NOT done.  There is no shell!
-            However, see the SHELL virtual command below!
+            However, see the SHELL virtual command below! Shorthand: '!'
     CANCEL  And a single variable, the timer to cancel
     RELAY   followed by a device to relay the command to.  This is only
             here so that you don't have to use command(device=xxxx) in
             a million places.  If you prefer, you can set a device for
             a command using parameter syntax if you need to, and even
             set it to a parameter.  Likewise "RELAY $otherdevice" works
+            Shorthand is '->'
     NOP     Do nothing at all.  This is useful when you want to use an on/off
             command purely for the trigger, without any actual command.  This
             will stop you from getting error messages.  Anything after the
             NOP is guaranteed to be ignored, so you can also use this to
-            "comment out" a command.
+            "comment out" a command. Shortcut is '#'
 
 Any other "rvalue" should be an IR code created with "learnCommand"
 
@@ -65,6 +66,30 @@ simultaneously, you just need to put them on a timer, such as 1 second,
 or set a variable and use a SET trigger to trigger the command, which
 uses a delay equal to the device delay.
 
+Device Shorthand!  Instead of using device= all over, you can prefix
+most macro command names and variables names with DeviceName/ to refer
+to the given device.  In programming parlance, this is the "namespace"
+you are referring to.  Example: BeagleBone/temp refers to the temp
+variable (or sensor) on the BeagleBone device.  Using virtual devices
+will allow you to keep things well organized.
+
+Built-ins!  Instead of making a whole new command to just set or clear
+a variable inside an existing macro, there are now built-ins!
+    set(var)        Sets a variable to 1
+    set(var,value)  Sets a variable to a value
+    clear(var)      Sets a variable to 0
+    toggle(var)     Changes 0 to 1, all others to 0
+    sleep(2.2)      Sleeps given number of seconds
+    inc(var)        increments a var
+    dec(var)        decrements a var
+    cancel(name)    cancel an event by name
+    print(var)      prints the value of a variable after expansion
+    logic(...)      specify the test and other parameters as variables
+    event(...)      specify the time and commands as variables
+    sleep(s)        pause for the given number of seconds
+    timerXX(cmd)    Run 'cmd' as an event after waiting XX minutes
+                    NOTE: XX may be floating point!
+    MORE COMING AS THE NEED ARISES!  Maybe math expressions
 
 VARIABLES
 ---------
@@ -100,23 +125,17 @@ The following keywords are defined
         ip      the ip address to send the packet to
         port    optional (defaults to 7)
 
-    TEST    The command will test a variable.  It must be single on/off value,
-            0 or 1.  Depending on the value, either the "on" or "off" branches
-            are executed.  The "test" variable may also be a sensor name!
-        on      command if the variable is on
-        off     command if the variable is off
-
-    SET     Defines a trigger to run when a variable changes.  This should be
-            a TEST or LOGIC section normally.  The command will be run async
+    TRIGGER Defines a trigger to run when a variable changes.  This should be
+            a macro or LOGIC section normally.  The command will be run async
             so that if a value is set multiple times, it will only be run once.
             NEW: You can now perform the test as part of the trigger.  Commands
             run from a MACRO that end in on/off will now perform variable sets
             and triggers like the URL.
-        trigger Name of the section to run when variable is changed
+        command Name of the section to run when variable is changed
         on      if trigger is not set, and variable is now '1', do this
         off     if trigger is not set, and variable is now '0', do this
 
-    CHECK   Sends a PING to a host to see if it's up.  If the host is up, the
+    PING    Sends a PING to a host to see if it's up.  If the host is up, the
             host is considered to be "on", else it's "off".  You could use a
             WOL section to try to turn it on, or turn it on with an IR command
             defined in "Commands"
@@ -141,7 +160,7 @@ The following keywords are defined
             minutes, and/or hours (if you name multiple, they are added - so
             an hour an a half is done by setting hours = 1 and minutes = 30).
             To set a recurring event, just use a MACRO that calls the timer
-            again.
+            again. This command may run in parallel with others.
         command     The command string to run.  Can be real or virtual.  The
                     parameters of the command that triggered the timer are
                     saved and used run the command
@@ -176,7 +195,8 @@ If there is no compare, the value of "test" can be 0 or 1, which will trigger
 The value of "test" may also be a single word string.  If a matching value is
 found, it will be executed.  For example, if the "test" value is the sensor
 "lights", and it returns a value of "dark", then the "dark = " line will
-tell the system what command to go to next!
+tell the system what command to go to next!  This means you can use LOGIC
+like a "switch" statement.
 
 If the test is numeric, it might be positive or negative or zero.  It may also
 be compared to "compare" resulting in a value that is positive or negative,
@@ -190,7 +210,9 @@ meaning the test is less, more, or equal to the compare value
         else    If none of the above, run else
         error   An exception occured
 
-NOTE: You can use a LOGIC section to perform loops and other controls
+NOTE: You can use a LOGIC section to perform loops and other controls.  Loop
+by calling itself (or another LOGIC section that calls it back, etc).  Use
+direct values to form a switch, etc.
 
 
 EXAMPLE #1
@@ -208,7 +230,7 @@ muteFor30 = MACRO mute muteIn30
 
 [TIMER muteIn30]
 seconds = 30
-command = mute
+command = .mute
 
 
 EXAMPLE #2
@@ -222,13 +244,13 @@ ac82deg = xxxxxxxxxxxxx-IR-CODES-xxxxxxxxxxxxxx
 [Status]
 Ac = 0
 
-[SET Ac]
-trigger = testAcStatus
+[TRIGGER Ac]
+command = .testAcStatus
 
 [LOGIC testAcStatus]
 test = Ac
-on = ac78deg
-off = ac82deg
+on = .ac78deg
+off = .ac82deg
 
 Here, instead of turning on and off the AC with the AC codes directly, we use
 /setStatus/Acon and /setStatus/Acoff URLs.  The SET section defines code to
@@ -250,18 +272,18 @@ number.  The person that wants to guess the number will set their guess with
 [LOGIC GuessNumber]
 test = guess
 compare = target
-less = PRINT higher
-more = PRINT lower
-equal = PRINT You guessed it
+less = .PRINT higher
+more = .PRINT lower
+equal = .PRINT You guessed it
 
-[SET guess]
-trigger = GuessNumber
+[TRIGGER guess]
+command = .GuessNumber
 
-[SET target]
-trigger = PRINT Value set!
+[TRIGGER target]
+command = .PRINT Value set!
 
-The "SET target" line just returns a string for demo purposes and doesn't do
-anything special.  The "SET guess" line causes a conditional to be triggered
+The "TRIGGER target" line just returns a string for demo purposes and doesn't do
+anything special.  The "TRIGGER guess" line causes a conditional to be triggered
 when the "guess" is set.  The user will get one of the printed lines hinting
 about what value to guess next.
 
