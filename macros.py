@@ -478,11 +478,11 @@ def execute_logicnode_raw(query):
                     newcommand = expandVariables(query["equal"],query)
                 elif "zero" in query:
                     newcommand = expandVariables(query["zero"],query)
-            if newcommand is None:
-                if "else" in query:
-                    newcommand = expandVariables(query["else"],query)
-            if newcommand is not None:
-                return sendCommand(newcommand,query)
+        if newcommand is None:
+            if "else" in query:
+                newcommand = expandVariables(query["else"],query)
+        if newcommand is not None:
+            return sendCommand(newcommand,query)
     except Exception as e:
         if "error" in query:
             newcommand = expandVariables(query['error'],query)
