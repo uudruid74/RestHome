@@ -55,7 +55,7 @@ def readSettings(settingsFile,devname):
                         sensor.trigger = trigger = settingsFile.get(section, "trigger")
                         initialparams = {}
                         initialparams['device'] = devname
-                        macros.eventList.add("POLL_"+devname+"_"+sensorname,2.0,sensor.trigger,initialparams)
+                        macros.eventList.add("POLL_"+devname+"_"+sensorname,4.0,sensor.trigger,initialparams)
                     sensor.lastread = None #- Change this to read the status variable
         else:
             return False
@@ -95,11 +95,11 @@ def getSensor(sensorName,params):
             reading2 = ADC.read(sensor.gpio)
             reading = (reading1+reading2)/2
             millivolts = reading * 1800  # 1.8V reference = 1800 mV
-            temp_c = (millivolts - 500) / 10
+            tempC = (millivolts - 500) / 10
             if sensor.sensorType == "tempC":
                 sensor.lastread = tempC
             elif sensor.sensorType == "tempF":
-                tempF = (temp_c * 9/5) + 32
+                tempF = (tempC * 9/5) + 32
                 sensor.lastread = tempF
         value = round(sensor.lastread)
         params['value'] = value

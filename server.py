@@ -27,6 +27,7 @@ import http.server
 import device_broadlink
 import device_url
 import device_gpio
+import device_scheduler
 import device_virtual
 
 def reloadAll():
@@ -34,6 +35,7 @@ def reloadAll():
     reload(device_broadlink)
     reload(device_url)
     reload(device_gpio)
+    reload(device_scheduler)
     reload(device_virtual)
     reload(settings)
 
@@ -50,6 +52,7 @@ class Thread(threading.Thread):
         self.daemon = True
         time.sleep(self.i/THROTTLE)
         self.start()
+
     def run(self):
         httpd = http.server.HTTPServer(self.addr, Handler, False)
 
@@ -63,7 +66,7 @@ class Thread(threading.Thread):
                 event = macros.eventList.pop()
                 cprint ("EVENT (%s) %s/%s" % (datetime.datetime.now().strftime("%I:%M:%S"),event.params['device'],event.name),"blue")
                 if event.name.startswith("POLL_"):
-                    (POLL,devicename,argname) = event.name.split('_')
+                    (POLL,devicename,argname) = event.name.split('_',2)
                     value = devices.Dev[devicename]["pollCallback"](devicename,argname,event.command,event.params)
                     if value is not False:
                         setStatus(argname,str(value),event.params)
@@ -326,27 +329,28 @@ def sendCommand(commandName,params):
             command = settingsFile.get(serviceName, commandName)
         elif settingsFile.has_option('Commands', commandName):
             command = settingsFile.get('Commands', commandName)
-        if command is False:
+        if command is False and isRepeat is False:
             if settingsFile.has_option(serviceName, newCommandName):
                 command = settingsFile.get(serviceName, newCommandName)
                 params['command'] = newCommandName
             elif settingsFile.has_option('Commands', newCommandName):
                 command = settingsFile.get('Commands', newCommandName)
                 params['command'] = newCommandName
-
+        elif command is False and isRepeat is True:
+            return "fail: %s was ignored"
         if command is False:
             result = macros.checkMacros(commandName,params)
         else:
             result = macros.checkMacros(command,params)
         if result:
             return result
-        if not isRepeat:
-            with devices.Dev[deviceName]['Lock']:
-                send = devices.Dev[deviceName]['sendCommand']
-                if send is not None:
-                    result = send(command,device,deviceName,params)
-            if result:
-                return commandName
+
+        with devices.Dev[deviceName]['Lock']:
+            send = devices.Dev[deviceName]['sendCommand']
+            if send is not None:
+                result = send(command,device,deviceName,params)
+        if result:
+            return commandName
         return False
 
 def learnCommand(commandName, params):

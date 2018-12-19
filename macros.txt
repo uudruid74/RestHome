@@ -185,6 +185,7 @@ The following keywords are defined
 The LOGIC Section is the ultimate / universal conditional.  It can take many
 forms, so we'll devote a bit more area to this one:
         test        The variable name to test is not optional
+        rtest       "Raw" Test is an actual value to test, not variable
         compare     If a compare variable is listed, it's compared with the 
                     test.
 

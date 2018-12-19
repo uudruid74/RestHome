@@ -442,7 +442,12 @@ def execute_event(command,query):
 
 def execute_logicnode_raw(query):
     try:
-        value = getStatus(query["test"],query)
+        if "test" in query:
+            value = getStatus(query["test"],query)
+        elif "rtest" in query:
+            value = query["rtest"]
+        else:
+            return False
         newcommand = None
         if str(value) in query:
             newcommand = expandVariables(query[str(value)],query)
@@ -483,12 +488,14 @@ def execute_logicnode_raw(query):
                 newcommand = expandVariables(query["else"],query)
         if newcommand is not None:
             return sendCommand(newcommand,query)
+        return False
     except Exception as e:
         if "error" in query:
             newcommand = expandVariables(query['error'],query)
             return sendCommand(newcommand,query)
         cprint ("LOGIC Failed: %s" % e, "yellow")
         traceback.print_exc()
+        return False
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query):
@@ -499,6 +506,8 @@ def execute_logicnode(command,query):
     newquery['command'] = command
     if settingsFile.has_option(section,"test"):
         newquery["test"] = expandVariables(settingsFile.get(section,"test"),query)
+    elif settingsFile.has_option(section,"rtest"):
+        newquery["rtest"] = expandVariables(settingsFile.get(section,"rtest"),query)
     else:
         cprint ("LOGIC Failed: A test value is required","yellow")
         return

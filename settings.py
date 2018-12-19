@@ -60,7 +60,10 @@ for section in settings.sections():
         Dev['Delay'] = float(settings.get(section, 'Delay').strip())
     #print '''Setting "%s" delay to "%s"''' % (section,Dev[section,'Delay'])
     if settings.has_option(section,'Device'):
-        Dev['Device'] = int(settings.get(section, 'Device').strip(),16)
+        try:
+            Dev['Device'] = int(settings.get(section, 'Device').strip(),16)
+        except:
+            Dev['Device'] = settings.get(section,'Device').strip()
     else:
         Dev['Device'] = None
     if settings.has_option(section,'Type'):
