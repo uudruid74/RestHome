@@ -102,6 +102,7 @@ And you can trigger your own commands like a built-in
                     of the "sections" above can be used.
     MORE COMING AS THE NEED ARISES!  Maybe math expressions
 
+
 VARIABLES
 ---------
 
@@ -172,26 +173,32 @@ The following keywords are defined
             an hour an a half is done by setting hours = 1 and minutes = 30).
             To set a recurring event, just use a MACRO that calls the timer
             again. This command may run in parallel with others.
+
+            NOTE: You can also just use timerXX(command) to run a command in
+            XX minutes without defining the timer yourself.
+
         command     The command string to run.  Can be real or virtual.  The
                     parameters of the command that triggered the timer are
                     saved and used run the command
+
     RADIO   Used to set modes that are mutually exclusive.  The state of which
-            mode is currently active is saved.  When you execite this command
+            mode is currently active is saved.  When you execute this command
             you pass in the variable "button" (in parenthesis if a MACRO, or
             in the URL as a parameter) set to the new button you are "pushing"
-            You can increment a list of options by using INC to increment a
-            status variable, and then use a SET section to trigger the new
-            RADIO option.  Make the last button a CLEAR command to restart!
 
-            The parameters are:
-        button0off  Button 0 is the first/default button.  The off command for
-                    the old button state is sent before the new button is
-                    turned on (break before make).  The off command is optional
-        button0on   All buttons have a number and an "on" command.
-        button1on   Each button is just the command to execute when the button
-                    is pushed.  It will not be sent twice if the same button
-                    is pushed twice.
-        button1off  Off commands are optional.
+            The parameters of this command are simply the names of the buttons
+            which you wish to define.  If name ends in "off" then this command
+            will be sent any time the given mode is exited.  For example, if
+            you send "mybutton(A)" and then send "mybutton(B)", then the
+            definition for "Aoff" is sent right before "B".
+
+            If you want the named buttons to simply send the command, you can
+            list all of these "pass-through" commands in a single parameter
+            called "commands".  They are space separated.
+
+            A command called "else" is run if no other "on" commands are
+            available.  If "else" is not defined, the variable associated
+            with the RADIO group will be set to "error"
 
 The LOGIC Section is the ultimate / universal conditional.  It can take many
 forms, so we'll devote a bit more area to this one:

@@ -71,8 +71,9 @@ class EventList(object):
             if found:
                 cprint("Deleting old event: %s=%s" % (found.name,found.command),"yellow")
                 ret = self.delete(name)
-            params['serialize'] = True
-            self.insert(EventNode(name,fire,command,params))
+            newparams = params.copy()
+            newparams['serialize'] = True
+            self.insert(EventNode(name,fire,command,newparams))
     def find(self,name):
         with self.lock:
             node = self.begin
@@ -298,7 +299,8 @@ def exec_macro(commandFromSettings,query):
                     elif command == "event":
                         execute_event_raw("event-"+time.time(),newquery)
                     else:
-                        checkConditionals(command,newquery)
+                        if checkConditionals(command,newquery) is False:
+                           sendCommand(command,newquery)
         elif "," in command:
             try:
                 (actualCommand, repeatAmount) = command.split(',')
@@ -406,17 +408,30 @@ def execute_radio(command,query):
             #cprint ("RADIO button %s already at state = %s" % (command,status),"cyan")
             return status
         else:
-            off = "button" + status + "off"
+            if status == "off" or status == "poweroff":
+                off = "poweroff"
+            else:
+                off = status + "off"
             if settingsFile.has_option(section,off):
                 offCommand = settingsFile.get(section,off)
                 if offCommand:
                     sendCommand(offCommand,query)
                     time.sleep(query["deviceDelay"])
-            on = "button" + newstatus + "on"
-            if settingsFile.has_option(section,on):
+            on = newstatus
+            if settingsFile.has_option(section,"commands"):
+                if on in settingsFile.get(section,"commands"):
+                    sendCommand(on,query)
+            elif settingsFile.has_option(section,on):
                 onCommand = settingsFile.get(section,on)
                 if onCommand:
                     sendCommand(onCommand,query)
+            elif settingsFile.has_option(section,"else"):
+                newstatus = 'else'
+                onCommand = settingsFile.get(section,"else")
+                if onCommand:
+                    sendCommand(onCommand,query)
+            else:
+                newstatus = "error"
             setStatus(command,newstatus,query)
         return command
     except Exception as e:
