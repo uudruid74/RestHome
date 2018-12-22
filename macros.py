@@ -298,7 +298,7 @@ def exec_macro(commandFromSettings,query):
                     elif command == "event":
                         execute_event_raw("event-"+time.time(),newquery)
                     else:
-                        check_conditionals(command,newquery)
+                        checkConditionals(command,newquery)
         elif "," in command:
             try:
                 (actualCommand, repeatAmount) = command.split(',')

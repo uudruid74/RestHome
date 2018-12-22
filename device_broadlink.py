@@ -137,6 +137,9 @@ def sendCommand(command,device,deviceName,params):
     if command is False and se in params and params[se] is True:
         #- Silently ignore commands that are just used for side-effects
         return False
+    if command is False:
+        cprint("broadlink: There is no code defined for %s" % params['command'],"yellow")
+        return False
     try:
         decodedCommand = binascii.unhexlify(command)
         AESEncryption = AES.new(device.key, AES.MODE_CBC, bytes(device.iv))
