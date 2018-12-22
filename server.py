@@ -69,7 +69,8 @@ class Thread(threading.Thread):
                     (POLL,devicename,argname) = event.name.split('_',2)
                     value = devices.Dev[devicename]["pollCallback"](devicename,argname,event.command,event.params)
                     if value is not False:
-                        setStatus(argname,str(value),event.params)
+                        if value is not None and value != '':
+                            setStatus(argname,str(value),event.params)
                         sendCommand(event.command,event.params)
                 else:
                     sendCommand(event.command,event.params)
@@ -225,6 +226,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 response = "Failed: Unknown command - %s" % commandName
 
+        #- Should UI based commands really be local only?
         elif 'listEvents' in self.path:
             if RestrictAccess and self.client_address[0] not in RestrictAccess:
                 return self.access_denied()
@@ -234,6 +236,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if RestrictAccess and self.client_address[0] not in RestrictAccess:
                 return self.access_denied()
             response = devices.dumpDevices()
+
+        elif 'listRooms' in self.path:
+            if RestrictAccess and self.client_address[0] not in RestrictAccess:
+                return self.access_denied()
+            response = devices.dumpRooms()
 
         elif 'listStatus' in self.path:
             if RestrictAccess and self.client_address[0] not in RestrictAccess:
@@ -290,6 +297,8 @@ def sendCommand(commandName,params):
         (deviceName,commandName) = commandName.split('/')
         params = params.copy()
         params['device'] = deviceName
+        if commandName == "on" or commandName == "off" or commandName == "dim" or commandName == "bright":
+            commandName = (deviceName + commandName).lower()
     else:
         deviceName = params['device']
     if deviceName in devices.DeviceByName:
@@ -337,7 +346,10 @@ def sendCommand(commandName,params):
                 command = settingsFile.get('Commands', newCommandName)
                 params['command'] = newCommandName
         elif command is False and isRepeat is True:
-            return "fail: %s was ignored"
+            #- If we have a defined "toggle", ignore it.
+            #- Otherwise, it's not a toggle and send it through
+            if settingsFile.has_option('Commands', newCommandName):
+                return "fail: %s was ignored" % commandName
         if command is False:
             result = macros.checkMacros(commandName,params)
         else:
@@ -560,32 +572,32 @@ def readSettingsFile(settingsFile):
     DiscoverTimeout = settings.DiscoverTimeout
 
     # Override them
-    if settingsFile.has_option('General', 'password'):
-        GlobalPassword = settingsFile.get('General', 'password').strip()
+    if settingsFile.has_option('General', 'Password'):
+        GlobalPassword = settingsFile.get('General', 'Password').strip()
 
-    if settingsFile.has_option('General', 'serverPort'):
-        serverPort = int(settingsFile.get('General', 'serverPort'))
+    if settingsFile.has_option('General', 'ServerPort'):
+        serverPort = int(settingsFile.get('General', 'ServerPort'))
 
-    if settingsFile.has_option('General','serverAddress'):
-        listen_address = settingsFile.get('General', 'serverAddress')
+    if settingsFile.has_option('General','ServerAddress'):
+        listen_address = settingsFile.get('General', 'ServerAddress')
         if listen_address.strip() == '':
             listen_address = '0.0.0.0'
 
-    if settingsFile.has_option('General', 'restrictAccess'):
-        RestrictAccess = settingsFile.get('General', 'restrictAccess').strip()
+    if settingsFile.has_option('General', 'RestrictAccess'):
+        RestrictAccess = settingsFile.get('General', 'RestrictAccess').strip()
 
     if settingsFile.has_option('General', 'MaxThreads'):
         MaxThreads = settingsFile.get('General','MaxThreads')
     else:
         MaxThreads = 8
-    if settingsFile.has_option('General', 'learnFrom'):
-        LearnFrom = settingsFile.get('General', 'learnFrom').strip();
+    if settingsFile.has_option('General', 'LearnFrom'):
+        LearnFrom = settingsFile.get('General', 'LearnFrom').strip();
 
-    if settingsFile.has_option('General', 'allowOverwrite'):
+    if settingsFile.has_option('General', 'AllowOverwrite'):
         OverwriteProtected = False
 
-    if settingsFile.has_option('General','broadcastAddress'):
-        broadcast = settingsFile.get('General', 'broadcastAddress')
+    if settingsFile.has_option('General','BroadcastAddress'):
+        broadcast = settingsFile.get('General', 'BroadcastAddress')
         if broadcast_address.strip() == '':
             broadcast_address = '255.255.255.255'
 

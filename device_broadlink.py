@@ -135,7 +135,6 @@ def learnCommand(devname,device,params):
 def sendCommand(command,device,deviceName,params):
     se = params['command'] + ' side-effect'
     if command is False and se in params and params[se] is True:
-        cprint ("Sorry, %s doesn't seem to be defined for your %s" % (params['command'],deviceName),"yellow")
         #- Silently ignore commands that are just used for side-effects
         return False
     try:

@@ -10,7 +10,7 @@ Just a short outline ...
     - allow insert of devices/commands/logic
         * LOGIC is node based for easy GUI control
 
-ICONS - 
+ICONS -
     UI themes MUST support ..
         Generic = theme based
         Light = normally a bulb

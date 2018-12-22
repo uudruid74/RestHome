@@ -97,11 +97,13 @@ def readSettings(settingsFile,devname):
                 nextevent = nexttime - time.time()
                 if nextevent < 0:
                     nextevent += 86400 #- Seconds in a day
+                initialparams['polltime'] = 86400
                 macros.eventList.add("POLL_"+devname+"_"+var,nextevent,settingsFile.get(devname,var),initialparams)
                 device.varlist.append(var)
 
             if settingsFile.has_option(devname,"trigger"):
                 device.trigger = settingsFile.get(devname, "trigger")
+                initialparams['polltime'] = device.poll
                 macros.eventList.add("POLL_"+devname+"_trigger",2.0,device.trigger,initialparams)
         else:
             return False
@@ -168,13 +170,14 @@ def pollCallback(devicename,argname,command,params):
     device = devices.DeviceByName[devicename]
     now = time.time()
     settimeinfo(params)
-    nextevent = round(int(now / device.poll) + 1) * device.poll - now + 1
+    polltime = params['polltime']
+    nextevent = round(int(now / polltime) + 1) * polltime - now + 1
     macros.eventList.add("POLL_"+devicename+"_"+argname,nextevent,command,params)
 
     if device.enabled and (device.weekday == params['weekday'] or device.weekday == '*'):
-        return int(now)
+        return None     #- perform trigger, but don't set a variable
     else:
-        return False
+        return False    #- don't perform the trigger
 
 
 devices.addReadSettings(readSettings)

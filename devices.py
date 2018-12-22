@@ -4,11 +4,13 @@ from collections import defaultdict
 
 global Dev
 global DevList
+global HomeDevice
 
 DeviceByName = {}
 DevList = []
 Dev = defaultdict(dict)
 Modlist = {}
+DeviceByRoom = {}
 
 FuncDiscover = []
 FuncReadSettings = []
@@ -27,6 +29,12 @@ def addStartup(func):
 
 def addShutdown(func):
     FuncShutDown.append(func)
+
+def addRoom(device,name):
+    DeviceByRoom[device] = name
+
+def setHome(device):
+    DeviceByRoom['House'] = device
 
 def discover (settings,timeout,listen,broadcast):
     for func in FuncDiscover:
@@ -51,6 +59,16 @@ def dumpDevices():
     retval += '''}'''
     return retval
 
+def dumpRooms():
+    retval = '''{\n\t"ok": "%s"\n''' % DeviceByRoom['House']
+    with SettingsLock:
+        for devicename,roomname in DeviceByRoom.items():
+            if devicename == 'House':
+                continue
+            retval += '''\t"%s": "%s"\n''' % (devicename,roomname)
+    retval += '''}'''
+    return retval
+    
 def startUp():
     for func in FuncStartup:
         func()

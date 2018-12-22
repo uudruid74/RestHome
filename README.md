@@ -30,20 +30,21 @@ Example usage
 After viewing the sample settings.ini, erase it! The system will autodetect your devices.  It *should* tell you what optional modules need to be installed for various features
 
 The [General] section contains the following optional parameters
-- **serverAddress** = IP to listen on, rather than 0.0.0.0
-- **serverPort** = listen port (defaults to 8080)
+- **ServerAddress** = IP to listen on, rather than 0.0.0.0
+- **ServerPort** = listen port (defaults to 8080)
 - **Timeout** = Default timeout for network operations in tenths of a second
 - **DiscoverTimeout** = Device discovery timeout, defaults to the same as Timeout
-- **learnFrom** = IP addresses that can issue new commands to learn from (default is any)
-- **broadcastAddress** = a pending patch to python-broadlink will allow device discover to use a specified broadcast IP
+- **LearnFrom** = IP addresses that can issue new commands to learn from (default is any)
+- **BroadcastAddress** = a pending patch to python-broadlink will allow device discover to use a specified broadcast IP
 - **Autodetect** = if set to a number, do device discover for the given number of seconds.  This option removes itself.
-- **allowOverwrite** = if set to anything, allow learned commands to overwrite an existing entry.  The default is to deny a command that is already learned
-- **restrictAccess** = restrict all operations to this list of IPs
-- **password** = allow password-protected POST operations from any address
+- **AllowOverwrite** = if set to anything, allow learned commands to overwrite an existing entry.  The default is to deny a command that is already learned
+- **RestrictAccess** = restrict all operations to this list of IPs
+- **Password** = allow password-protected POST operations from any address
 - **MaxThreads** = maximum number of processing threads, defaults to 8
 - **Hostname** = remote hostname for forming URLs in local media and UI tools
+- **House** = name of a device representing the entire house
 
-If _password_ is specified, then GET operations are only allowed from hosts in _restrictAccess_.  GET operations won't need a password, but they'll only be allowed from specific hosts.  There is currently no way to restrict hosts AND require a password, but _serverAddress_ combined with firewall rules on the underlying host would be solution for the security paranoid, setting _password_ and not _restrictAccess_.
+If _Password_ is specified, then GET operations are only allowed from hosts in _RestrictAccess_.  GET operations won't need a password, but they'll only be allowed from specific hosts.  There is currently no way to restrict hosts AND require a password, but _serverAddress_ combined with firewall rules on the underlying host would be solution for the security paranoid, setting _Password_ and not _RestrictAccess_.
 
 2) Start python server.py
 
@@ -109,5 +110,28 @@ Response:
 }
 ```
 
-8) Check the PDF documentation on how to program loops, conditionals, and integrate with IFTTT, etc
+8) List all devices by Room (if assigned to a room), starting with Household name:
+```
+http://localhost:8080/listRooms
+```
+Response:
+```
+{
+        "ok": "StrayScampsDen"
+        "KitchenHeater": "Kitchen"
+        "Fireplace": "LivingRoom"
+        "BedroomHeater": "Bedroom"
+        "Kitchen": "Kitchen"
+        "CoffeePot": "Kitchen"
+        "BathroomHeater": "Bathroom"
+        "Alice": "LivingRoom"
+        "LG": "LivingRoom"
+        "AC": "LivingRoom"
+        "BeagleBone": "LivingRoom"
+        "Bedroom": "Bedroom"
+        "AV": "LivingRoom"
+}
+```
+
+9) Check the PDF documentation on how to program loops, conditionals, and integrate with IFTTT, etc
 

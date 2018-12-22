@@ -21,7 +21,9 @@ if settings.has_option('General', 'Hostname'):
     Hostname = settings.get('General','Hostname')
 else:
     Hostname = 'localhost'
-
+if settings.has_option('General','House'):
+    devices.Dev['default'] = settings.get('General','House')
+    devices.setHome(devices.Dev['default'])
 for section in settings.sections():
     #- Special sections, not a device
     if section == 'General' or 'Commands' in section or 'Status' in section:
@@ -66,6 +68,8 @@ for section in settings.sections():
             Dev['Device'] = settings.get(section,'Device').strip()
     else:
         Dev['Device'] = None
+    if settings.has_option(section,'Room'):
+        devices.addRoom(section,settings.get(section,'Room').strip())
     if settings.has_option(section,'Type'):
         Dev['Type'] = settings.get(section,'Type').strip()
     #    print ("Config: %s device has Type: %s" % (section,Dev[section,'Type']))
