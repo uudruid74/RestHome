@@ -18,7 +18,8 @@ import time
 #- that is run every "poll" (default 1 hr, on the hour) minutes or
 #- you can specify times to run commands, such as "04_30" to run
 #- a command at 4:30 am.   Each execution will have variables set:
-#- $month, $day, $hour, $minute, $second, and $weekday
+#- $month, $day, $hours, $minutes, $seconds, $weekday, and $isWeekday
+#- The final is a boolean
 
 try:
     devices.Modlist['cron'] = True
@@ -38,10 +39,13 @@ def settimeinfo(params):
     timeinfo = time.localtime()
     params['month'] = timeinfo.tm_mon
     params['day'] = timeinfo.tm_mday
-    params['hour'] = timeinfo.tm_hour
-    params['minute'] = timeinfo.tm_min
-    params['second'] = timeinfo.tm_sec
+    params['hours'] = timeinfo.tm_hour
+    params['minutes'] = timeinfo.tm_min
+    params['seconds'] = timeinfo.tm_sec
     params['weekday'] = weekdays[timeinfo.tm_wday]
+    params['isWeekday'] = "True"
+    if timeinfo.tm_wday > 4:
+        params['isWeekday'] = "False"
     return timeinfo
 
 
@@ -69,10 +73,25 @@ def readSettings(settingsFile,devname):
         Dev = devices.Dev[devname]
         if Dev['Type'] == 'sched':
             device = type('', (), {})()
-            if settingsFile.has_option(devname,"enabled"):
-                device.enabled = bool(settingsFile.get(devname,"enabled"))
+            device.varlist = []
+            initialparams = {}
+            if settingsFile.has_option(devname,"Device"):
+                initialparams['device'] = settingsFile.get(devname,"Device")
             else:
-                device.enabled = True
+                initialparams['device'] = devname
+            (timeinfo) = settimeinfo(initialparams)
+            initialparams['polltime'] = device.poll = 86400
+            device.onlyWeekdays = False
+            device.onlyWeekends = False
+            device.enabled = True
+            if settingsFile.has_option(devname,"enabled"):
+                enabled = settingsFile.get(devname,"enabled")
+                if enabled.lower() == "weekdays":
+                    device.onlyWeekdays = True
+                elif enabled.lower() == "weekends":
+                    device.onlyWeekends = True
+                else:
+                    device.enabled = bool(enabled)
             if settingsFile.has_option(devname,"poll"):
                 device.poll = float(settingsFile.get(devname,"poll")) * 60
             else:
@@ -82,13 +101,6 @@ def readSettings(settingsFile,devname):
             else:
                 device.weekday = '*'
 
-            initialparams = {}
-            if settingsFile.has_option(devname,"Device"):
-                initialparams['device'] = settingsFile.get(devname,"Device")
-            else:
-                initialparams['device'] = devname
-            (timeinfo) = settimeinfo(initialparams)
-            device.varlist = []
             for var in settingsFile.options(devname):
                 if '_' not in var:
                     continue
@@ -97,7 +109,6 @@ def readSettings(settingsFile,devname):
                 nextevent = nexttime - time.time()
                 if nextevent < 0:
                     nextevent += 86400 #- Seconds in a day
-                initialparams['polltime'] = 86400
                 macros.eventList.add("POLL_"+devname+"_"+var,nextevent,settingsFile.get(devname,var),initialparams)
                 device.varlist.append(var)
 
@@ -171,13 +182,21 @@ def pollCallback(devicename,argname,command,params):
     now = time.time()
     settimeinfo(params)
     polltime = params['polltime']
-    nextevent = round(int(now / polltime) + 1) * polltime - now + 1
+    if polltime != 86400:
+        nextevent = round(int(now / polltime) + 1) * polltime - now + 1
+    else:
+        if params['seconds'] > 0:
+            nextevent = nextevent - int(params['seconds'])
     macros.eventList.add("POLL_"+devicename+"_"+argname,nextevent,command,params)
 
     if device.enabled and (device.weekday == params['weekday'] or device.weekday == '*'):
-        return None     #- perform trigger, but don't set a variable
-    else:
-        return False    #- don't perform the trigger
+        if device.onlyWeekends and bool(params['isWeekday']):
+            return False    #- don't run under this condition
+        elif device.onlyWeekdays and not bool(params['isWeekday']):
+            return False
+        else:
+            return None     #- perform trigger, don't set a variable
+    return False    #- don't perform the trigger
 
 
 devices.addReadSettings(readSettings)
