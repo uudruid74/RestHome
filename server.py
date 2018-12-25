@@ -1,4 +1,5 @@
-#!/usr/bin/python3.4
+#!/usr/bin/python3
+#- Note python 3.6 or later now required!
 from termcolor import cprint
 from os import path
 from importlib import reload
@@ -23,12 +24,13 @@ import platform
 import pdb
 import socketserver
 import http.server
+import mimetypes
 
-import device_broadlink
-import device_url
-import device_gpio
-import device_scheduler
-import device_virtual
+from plugins import device_broadlink
+from plugins import device_url
+from plugins import device_gpio
+from plugins import device_scheduler
+from plugins import device_virtual
 
 def reloadAll():
     reload(devices)
@@ -82,17 +84,31 @@ class Thread(threading.Thread):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     Parameters = collections.defaultdict(lambda : ' ')
-    def _set_headers(self):
+    def _set_headers(self,path):
         self.send_response(200)
-        self.send_header('Content-type', 'application/json')
+        filetype = 'application/json'
+        (guesstype,encoding) = mimetypes.guess_type(path,False)
+        if guesstype is not None:
+            filetype = guesstype
+        if encoding is not None:
+            self.send_header('Content-Encoding', encoding)
+        self.send_header('Content-Type', filetype)
         self.send_header('Access-Control-Allow-Origin','*')
         self.end_headers()
+
+    def client_ip(self):
+        remote_ip = self.headers.get('X-Forwarded-For', self.headers.get('X-Real-Ip', self.client_address[0]))
+        return remote_ip
+
+    def log_message(self, format, *args):
+        sys.stderr.write("%s - - [%s] %s\n" %
+            (self.client_ip(),self.log_date_time_string(),format%args))
 
     def do_GET(self):
         try:
             if GlobalPassword:
                 try:
-                    if RestrictAccess and self.client_address[0] not in RestrictAccess:
+                    if RestrictAccess and self.client_ip() not in RestrictAccess:
                         return self.access_denied()
                     return self.messageHandler()
                 except NameError as e:
@@ -121,14 +137,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.password_required()
 
     def password_required(self):
-        response = "POST Password required from %s" % self.client_address[0]
+        response = "POST Password required from %s" % self.client_ip()
         self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
         cprint (response,"red")
         self.close_connection = 1
         return False
 
     def access_denied(self):
-        response = "Client %s is not allowed to use GET!" % self.client_address[0]
+        response = "Client %s is not allowed to use GET!" % self.client_ip()
         self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
         cprint (response,"red")
         self.close_connection = 1
@@ -138,7 +154,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if 'favicon' in self.path:
             return False
 
-        self._set_headers()
+        if '..' in self.path:
+            return False
+
+        self._set_headers(self.path)
         if '?' in self.path:
             (self.path,query) = self.path.split('?')
             params = re.split('[&=]+',query)
@@ -147,8 +166,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         paths = re.split('[//=]+',self.path)
         if 'learnCommand' in self.path:
             try:
-                if self.client_address[0] not in LearnFrom:
-                    cprint ("Won't learn commands from %s.  Access Denied!" % self.client_address[0],"red",attrs=['bold'])
+                if self.client_ip() not in LearnFrom:
+                    cprint ("Won't learn commands from %s.  Access Denied!" % self.client_ip(),"red",attrs=['bold'])
                     return False
             except NameError:
                 pass
@@ -228,22 +247,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         #- Should UI based commands really be local only?
         elif 'listEvents' in self.path:
-            if RestrictAccess and self.client_address[0] not in RestrictAccess:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
                 return self.access_denied()
             response = macros.eventList.dump()
 
         elif 'listDevices' in self.path:
-            if RestrictAccess and self.client_address[0] not in RestrictAccess:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
                 return self.access_denied()
             response = devices.dumpDevices()
 
         elif 'listRooms' in self.path:
-            if RestrictAccess and self.client_address[0] not in RestrictAccess:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
                 return self.access_denied()
             response = devices.dumpRooms()
 
         elif 'listStatus' in self.path:
-            if RestrictAccess and self.client_address[0] not in RestrictAccess:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
                 return self.access_denied()
             if paths[2] == 'listStatus':
                 section = paths[1] + " Status"
@@ -264,6 +283,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 response = '''{ "ok": "%s deleted" }''' % retval.name
             else:
                 response = "Failed - no such event: %s" % event
+
+        elif '/ui/' in self.path:
+            path = "ui/" + settings.DefaultUI + '/' + self.path.split('/ui/',1)[1]
+            socket = self.connection
+            with open(path,'rb') as f:
+                socket.sendfile(f,0)
+            cprint("\t%s\n" % path)
+            return
 
         elif 'getSensor' in self.path:
             if paths[2] == 'getSensor':
@@ -294,7 +321,7 @@ def sendCommand(commandName,params):
     if commandName.startswith('.') or commandName.startswith('MACRO'):
         return macros.checkMacros(commandName,params)
     if '/' in commandName:
-        (deviceName,commandName) = commandName.split('/')
+        (deviceName,commandName) = commandName.split('/',1)
         params = params.copy()
         params['device'] = deviceName
         if commandName == "on" or commandName == "off" or commandName == "dim" or commandName == "bright":
@@ -623,6 +650,7 @@ def readSettingsFile(settingsFile):
 
     if devices.DevList:
         for devname in devices.DevList:
+            devices.Dev[devname]['BaseType'] = 'unknown'
             device = devices.readSettings(settingsFile,devname)
             if devices.Dev[devname]['BaseType'] != 'virtual':
                 devtype = devices.Dev[devname]['Type']
@@ -640,11 +668,11 @@ def readSettingsFile(settingsFile):
             #device.hostname = devname
             if hasattr(device, 'auth'):
                 device.auth()
-            if devices.Dev[devname]['StartUpCommand'] != None:
-                commandName = devices.Dev[devname]['StartUpCommand']
+            if devices.Dev[devname]['StartupCommand'] != None:
+                commandName = devices.Dev[devname]['StartupCommand']
                 query = {}
                 query["device"] = devname
-                macros.eventList.add("StartUp "+devname,1,commandName,query)
+                macros.eventList.add("Startup "+devname,1,commandName,query)
 
     return { "port": serverPort, "listen": listen_address, "threads": MaxThreads, "timeout": GlobalTimeout }
 
@@ -674,10 +702,23 @@ if __name__ == "__main__":
         while serverParams is None:
             serverParams = readSettingsFile(settingsFile)
         macros.init_callbacks(settingsFile,sendCommand,getStatus,setStatus,toggleStatus)
-        devices.startUp()
+        devices.startUp(setStatus,getStatus,sendCommand)
         start(**serverParams)
+        cprint("\nShutting down devices ...")
+        for devname in devices.DeviceByName:
+            if devices.Dev[devname]['ShutdownCommand'] != None:
+                commandName = devices.Dev[devname]['ShutdownCommand']
+                query = {}
+                query["device"] = devname
+                query["command"] = commandName
+                query['serialize'] = True
+                if 'Delay' in devices.Dev[devname]:
+                    query['deviceDelay'] = float(devices.Dev[devname]['Delay'])
+                else:
+                    query['deviceDelay'] = 0.2
+                sendCommand(commandName,query)
         if not ShutdownRequested.is_set():
             time.sleep(20)
             cprint ("Reloading configuration ...\n","cyan")
             reloadAll()
-    devices.shutDown()
+    devices.shutDown(setStatus,getStatus)

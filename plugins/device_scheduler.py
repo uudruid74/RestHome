@@ -72,6 +72,7 @@ def readSettings(settingsFile,devname):
     try:
         Dev = devices.Dev[devname]
         if Dev['Type'] == 'sched':
+            Dev['BaseType'] = "cron"
             device = type('', (), {})()
             device.varlist = []
             initialparams = {}
@@ -129,7 +130,6 @@ def readSettings(settingsFile,devname):
         Dev['getStatus'] = getStatus
         Dev['setStatus'] = setStatus
         Dev['getSensor'] = None
-        Dev['BaseType'] = "cron"
         Dev['pollCallback'] = pollCallback
 
         return device
@@ -182,11 +182,11 @@ def pollCallback(devicename,argname,command,params):
     now = time.time()
     settimeinfo(params)
     polltime = params['polltime']
+    nextevent = now + polltime
     if polltime != 86400:
         nextevent = round(int(now / polltime) + 1) * polltime - now + 1
     else:
-        if params['seconds'] > 0:
-            nextevent = nextevent - int(params['seconds'])
+        nextevent = nextevent - int(params['seconds'])
     macros.eventList.add("POLL_"+devicename+"_"+argname,nextevent,command,params)
 
     if device.enabled and (device.weekday == params['weekday'] or device.weekday == '*'):

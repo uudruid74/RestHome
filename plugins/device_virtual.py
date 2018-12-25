@@ -20,14 +20,25 @@ try:
     def readSettings(settingsFile,devname):
         Dev = devices.Dev[devname]
         if Dev['Type'] == 'Virtual':
+            Dev['BaseType'] = 'virtual'
             device = type('', (), {})()
             device.real = Dev['Actual']
             if device.real not in devices.Dev:
                 cprint ("I can't find the %s device" % device.real, "yellow")
                 return False
+            #- BUG: Change this to copy what we need rather than an exclude list
             Real = devices.Dev[device.real].copy()
-            del Real['StartUpCommand']
+            del Real['ShutdownCommand']
+            del Real['StartupCommand']
             del Real['Comment']
+            if 'Set' in Real:
+                del Real['Set']
+            if 'Find' in Real:
+                del Real['Find']
+            if 'Icon' in Real:
+                del Real['Icon']
+            if 'Method' in Real:
+                del Real['Method']
             Dev.update(Real)
         else:
             return False
@@ -42,7 +53,6 @@ try:
         Dev['getStatus'] = getStatus
         Dev['setStatus'] = setStatus
         Dev['getSensor'] = getSensor
-        Dev['BaseType'] = 'virtual'
         return device
 
 

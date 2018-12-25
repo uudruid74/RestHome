@@ -101,13 +101,13 @@ class EventList(object):
             return None
     def dump(self):
         now = time.time()
-        retval = '''{\n\t"ok": "eventList"\n'''
+        retval = '''{\n\t"ok": "eventList"'''
         with self.lock:
             node = self.begin
             while node != None:
-                retval += '''\t"%s": "%s"\n''' % (int(node.timestamp - now), node.name + " = " + node.command)
+                retval += ''',\n\t"%s": "%s"''' % (int(node.timestamp - now), node.name + " = " + node.command)
                 node = node.nextNode
-        retval += '''}'''
+        retval += '''\n}'''
         return retval
 
 eventList = EventList()
@@ -289,6 +289,9 @@ def exec_macro(commandFromSettings,query):
                         for param in paramString.split(','):
                             pair = param.split('=')
                             newquery[pair[0]] = pair[1]
+                    elif '=' in paramString:
+                        pair = paramString.split('=')
+                        newquery[pair[0]] = pair[1]
                     else:
                         if settingsFile.has_option(newquery['device'],paramString):
                             newquery['button'] = getStatus(paramString)
@@ -412,6 +415,9 @@ def execute_radio(command,query):
                 off = "poweroff"
             else:
                 off = status + "off"
+            if settingsFile.has_option(section,"pre"):
+                sendCommand(settingsFile.get(section,"pre"),query)
+                time.sleep(query["deviceDelay"])
             if settingsFile.has_option(section,off):
                 offCommand = settingsFile.get(section,off)
                 if offCommand:
@@ -431,8 +437,11 @@ def execute_radio(command,query):
                 if onCommand:
                     sendCommand(onCommand,query)
             else:
-                newstatus = "error"
+                newstatus = 'error'
             setStatus(command,newstatus,query)
+            if settingsFile.has_option(section,"post") and newstatus != 'error':
+                sendCommand(settingsFile.get(section,"post"),query)
+                time.sleep(query["deviceDelay"])
         return command
     except Exception as e:
         cprint ("RADIO %s Failed: %s" % (command,e),"yellow")

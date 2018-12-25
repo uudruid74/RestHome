@@ -37,9 +37,11 @@ def discover(settingsFile,timeout,listen,broadcast):
 def readSettings(settingsFile,devname):
     try:
         Dev = devices.Dev[devname]
-        device = type('', (), {})()
         if Dev['Type'] == 'GPIO':
+            Dev['BaseType'] = "gpio"
+            device = type('', (), {})()
             device.sensor = {}
+            ADC.setup()
             for section in settingsFile.sections():
                 if section.startswith("GPIO "):
                     sensorname = section[5:]
@@ -59,7 +61,6 @@ def readSettings(settingsFile,devname):
                     sensor.lastread = None #- Change this to read the status variable
         else:
             return False
-        ADC.setup();
         if 'Delay' in Dev:
             device.delay = Dev['Delay']
         else:
@@ -71,13 +72,11 @@ def readSettings(settingsFile,devname):
         Dev['getStatus'] = None
         Dev['setStatus'] = None
         Dev['getSensor'] = getSensor
-        Dev['BaseType'] = "gpio"
         Dev['pollCallback'] = pollCallback
 
         return device
     except Exception as e:
         cprint ("GPIO device support requires Adafruit python module.\npip3 install Adafruit_BBIO", "red")
-        traceback.print_exc()
         return None
 
 #- We'll use this later to turn on/off GPIO buttons and switches

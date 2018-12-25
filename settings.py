@@ -21,6 +21,14 @@ if settings.has_option('General', 'Hostname'):
     Hostname = settings.get('General','Hostname')
 else:
     Hostname = 'localhost'
+if settings.has_option('General','DefaultUI'):
+    DefaultUI = settings.get("General","DefaultUI")
+else:
+    DefaultUI = "default"
+if settings.has_option('General','PostalAddress'):
+    PostalAddress = settings.get_option("PostalAddress")
+else:
+    PostalAddress = ''
 if settings.has_option('General','House'):
     devices.Dev['default'] = settings.get('General','House')
     devices.setHome(devices.Dev['default'])
@@ -60,6 +68,7 @@ for section in settings.sections():
         Dev['Comment'] = section
     if settings.has_option(section,'Delay'):
         Dev['Delay'] = float(settings.get(section, 'Delay').strip())
+
     #print '''Setting "%s" delay to "%s"''' % (section,Dev[section,'Delay'])
     if settings.has_option(section,'Device'):
         try:
@@ -75,10 +84,14 @@ for section in settings.sections():
     #    print ("Config: %s device has Type: %s" % (section,Dev[section,'Type']))
     else: #- For legacy settings.ini support - will be removed soon
         Dev['Type'] = section.strip()[-2:]
-    if settings.has_option(section,'StartUpCommand'):
-        Dev['StartUpCommand'] = settings.get(section,'StartUpCommand').strip()
+    if settings.has_option(section,'ShutdownCommand'):
+        Dev['ShutdownCommand'] = settings.get(section,'ShutdownCommand').strip()
     else:
-        Dev['StartUpCommand'] = None
+        Dev['ShutdownCommand'] = None
+    if settings.has_option(section,'StartupCommand'):
+        Dev['StartupCommand'] = settings.get(section,'StartupCommand').strip()
+    else:
+        Dev['StartupCommand'] = None
     if settings.has_option(section,'Actual'):
         Dev['Actual'] = settings.get(section,'Actual').strip()
     else:

@@ -25,10 +25,10 @@ def addReadSettings(func):
     FuncReadSettings.append(func)
 
 def addStartup(func):
-    FuncStartUp.append(func)
+    FuncStartup.append(func)
 
 def addShutdown(func):
-    FuncShutDown.append(func)
+    FuncShutdown.append(func)
 
 def addRoom(device,name):
     DeviceByRoom[device] = name
@@ -48,32 +48,41 @@ def readSettings (settings,devname):
     cprint ("I don't know the type of device for %s" % devname,"yellow")
 
 def dumpDevices():
-    retval = '''{\n\t"ok": "deviceList"\n'''
+    retval = '''{\n\t"ok": "deviceList"'''
     with SettingsLock:
         for devicename,info in Dev.items():
             if 'Comment' not in info:
                 comment = 'Unknown'
             else:
                 comment = info['Comment']
-            retval += '''\t"%s": "%s"\n''' % (devicename, comment)
-    retval += '''}'''
+            retval += ''',\n\t"%s": "%s"''' % (devicename, comment)
+    retval += '''\n}'''
     return retval
 
 def dumpRooms():
-    retval = '''{\n\t"ok": "%s"\n''' % DeviceByRoom['House']
+    retval = '''{\n\t"ok": "%s"''' % DeviceByRoom['House']
     with SettingsLock:
         for devicename,roomname in DeviceByRoom.items():
             if devicename == 'House':
                 continue
-            retval += '''\t"%s": "%s"\n''' % (devicename,roomname)
-    retval += '''}'''
+            retval += ''',\n\t"%s": "%s"''' % (devicename,roomname)
+    retval += '''\n}'''
     return retval
-    
-def startUp():
-    for func in FuncStartup:
-        func()
 
-def shutDown():
+#- These commands work as follows
+#- The startup callback below is sent to all devices that want it
+#- Any "StartupCommand" registered in the settings file is done next
+#- During a reload or shutdown, a "Shutdown" command is sent before
+#- the 20 second shutdown delay.
+#- On a reload, the startup callback is done again, as is any
+#- StartupCommand.  
+#- Only on final shutdown is the shutdown callback made
+
+def startUp(globalSet,globalGet,globalSend):
+    for func in FuncStartup:
+        func(globalSet,globalGet,globalSend)
+
+def shutDown(globalSet,globalGet):
     for func in FuncShutdown:
-        func()
+        func(globalSet,globalGet)
 

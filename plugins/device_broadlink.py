@@ -89,6 +89,7 @@ def readSettings(settingsFile,devname):
             device = broadlink.dooya((Dev['IPAddress'], 80), Dev['MACAddress'], Dev['Device'])
         else:
             return False
+        Dev['BaseType'] = "broadlink"
 
         if 'Delay' in Dev:
             device.delay = Dev['Delay']
@@ -101,7 +102,6 @@ def readSettings(settingsFile,devname):
         Dev['getStatus'] = None
         Dev['setStatus'] = None
         Dev['getSensor'] = getSensor
-        Dev['BaseType'] = "broadlink"
         return device
     except Exception as e:
         cprint ("Broadlink device support requires broadlink python module.\npip3 install broadlink", "red")
