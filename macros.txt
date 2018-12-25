@@ -200,6 +200,11 @@ The following keywords are defined
             available.  If "else" is not defined, the variable associated
             with the RADIO group will be set to "error"
 
+            You may define a "pre" command that is sent before any change
+            in state (before the off, but not sent if no change).  And a
+            "post" command that is sent after all changes other than "error"
+
+
 The LOGIC Section is the ultimate / universal conditional.  It can take many
 forms, so we'll devote a bit more area to this one:
         test        The variable name to test is not optional
