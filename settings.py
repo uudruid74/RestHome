@@ -32,6 +32,9 @@ else:
 if settings.has_option('General','House'):
     devices.Dev['default'] = settings.get('General','House')
     devices.setHome(devices.Dev['default'])
+if settings.has_option('General','CustomDash'):
+    devices.setDash(settings.get('General','CustomDash'))
+
 for section in settings.sections():
     #- Special sections, not a device
     if section == 'General' or 'Commands' in section or 'Status' in section:

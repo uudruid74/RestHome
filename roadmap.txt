@@ -1,8 +1,9 @@
 
 Just a short outline ...
  * Add restricted URL commands to facilitate UI support
- * Add more values in settings for UI commands
+    just need getIcon now
  * Add chromecast device support
+ * Add RRD tool support
  * Add media stream device support (HTTP streaming)
  * Add UI device
     - Converts devices to cards

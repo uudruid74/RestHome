@@ -24,6 +24,7 @@ System Features
 - **State Safety**      Define startup/shutdown commands to restore sane state
 - **Webserver**         Internal web server for media (think Chromecast and UI) in progress!
 - **Security**          Understands SSL proxies with appropriate whitelist security
+- **Definable UI**      The "testing" UI is just starting.  Currently view only while I standardize controls some
 
 The programmability includes passing variables to/from URLs, setting persistent status variables, radio buttons (like a special switch with internal state), timers (parallel threads), triggers (perform actions when variables change), and logic nodes.  A logic node can be used to implement conditionals, switch statements, loops, and other control flow.
 

@@ -105,7 +105,7 @@ def sendCommand(command,device,deviceName,params):
                     result = "FOUND: " + match.group()
                 else:
                     result = "NOT FOUND.  Response: " + result[:60]
-            cprint("%s/%s-%s" % (deviceName,params['command'],result[:80]),"green")
+            cprint("%s/%s\n%s" % (deviceName,params['command'],result[:80]),"green")
             time.sleep(float(params['deviceDelay']))
             return True
         return False
@@ -113,6 +113,7 @@ def sendCommand(command,device,deviceName,params):
         if 'retries' not in params:
             params['retries'] = 0
         if e.errno != errno.ECONNRESET or params["retries"] > 2:
+            cprint("Unknown Error: %s %s retries=%s" % (e, e.errno,params['retries']), "red")
             raise # Not error we are looking for
         else:
             params["retries"] = params["retries"] + 1

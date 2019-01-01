@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 #- Note python 3.6 or later now required!
 from termcolor import cprint
-from os import path
+import os
 from importlib import reload
 import devices
 import settings
@@ -26,11 +26,9 @@ import socketserver
 import http.server
 import mimetypes
 
-from plugins import device_broadlink
-from plugins import device_url
-from plugins import device_gpio
-from plugins import device_scheduler
-from plugins import device_virtual
+THROTTLE = 4    #- spawn per second
+
+from plugins import *
 
 def reloadAll():
     reload(devices)
@@ -38,11 +36,9 @@ def reloadAll():
     reload(device_url)
     reload(device_gpio)
     reload(device_scheduler)
+    reload(device_log)
     reload(device_virtual)
     reload(settings)
-
-THROTTLE = 4    #- spawn per second
-
 
 class Thread(threading.Thread):
     def __init__(self, i, sock, addr, timeout):
@@ -85,6 +81,11 @@ class Thread(threading.Thread):
 class Handler(http.server.BaseHTTPRequestHandler):
     Parameters = collections.defaultdict(lambda : ' ')
     def _set_headers(self,path):
+        if path == '/':
+            self.send_response(301)
+            self.send_header('Location','/ui/index.html')
+            self.end_headers()
+            return
         self.send_response(200)
         filetype = 'application/json'
         (guesstype,encoding) = mimetypes.guess_type(path,False)
@@ -103,6 +104,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         sys.stderr.write("%s - - [%s] %s\n" %
             (self.client_ip(),self.log_date_time_string(),format%args))
+
+    def do_OPTIONS(self):
+        self.send_response(200, "ok")
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
     def do_GET(self):
         try:
@@ -261,17 +269,51 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.access_denied()
             response = devices.dumpRooms()
 
+        elif 'getIcon' in self.path:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
+                return self.access_denied()
+            devname,exten = os.path.splitext(paths[len(paths)-1])
+            pathname = "ui/" + settings.DefaultUI + '/icons/'
+            socket = self.connection
+            for icon in devices.Dev[devname]['Icons'].split():
+                filename = pathname+icon+exten
+                if os.path.isfile(filename):
+                    break
+            try:
+                with open(filename,'rb') as f:
+                    socket.sendfile(f,0)
+                cprint("\t%s\n" % filename,"cyan")
+            except Exception as e:
+                cprint("\t%s - %s\n" % (filename,e),"red")
+            return
+
+        elif 'getCustomDash' in self.path:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
+                return self.access_denied()
+            retval = devices.getDash()
+            if (retval is not False):
+                retval = macros.expandVariables(retval,self.Parameters)
+                response = '''{ "ok": "%s" }''' % retval
+            else:
+                response = '''{ "error": "No Dash Found" }'''
+
+        elif 'getHomeName' in self.path:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
+                return self.access_denied()
+            response = '''{ "ok": "%s" }''' % devices.getHome()
+
         elif 'listStatus' in self.path:
             if RestrictAccess and self.client_ip() not in RestrictAccess:
                 return self.access_denied()
-            if paths[2] == 'listStatus':
+            if len(paths) > 2 and paths[2] == 'listStatus':
                 section = paths[1] + " Status"
             else:
                 section = "Status"
-            response = '''{\n\t"ok": "%s"\n''' % section
-            for var in settingsFile.options(section):
-                response += '''\t"%s": "%s"\n''' % (var,settingsFile.get(section,var))
-            response += '''}'''
+            response = '''{\n\t"ok": "%s"''' % section
+            if settingsFile.has_section(section):
+                for var in settingsFile.options(section):
+                    response += ''',\n\t"%s": "%s"''' % (var,settingsFile.get(section,var))
+            response += '''\n}'''
 
         elif 'deleteEvent' in self.path:
             if paths[2] == 'deleteEvent':
@@ -285,11 +327,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 response = "Failed - no such event: %s" % event
 
         elif '/ui/' in self.path:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
+                return self.access_denied()
             path = "ui/" + settings.DefaultUI + '/' + self.path.split('/ui/',1)[1]
             socket = self.connection
-            with open(path,'rb') as f:
-                socket.sendfile(f,0)
-            cprint("\t%s\n" % path)
+            try:
+                with open(path,'rb') as f:
+                    socket.sendfile(f,0)
+                cprint("\t%s\n" % path,"cyan")
+            except Exception as e:
+                cprint("\t%s - %s\n" % (path,e),"red")
+            return
+
+        elif self.path is '/':
+            #cprint("Default Site","red")
             return
 
         elif 'getSensor' in self.path:
@@ -307,13 +358,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 response = '''{ "%s": "%s" }''' % (sensor, result)
         else:
             response = "Failed"
-        if "Failed" in response or "error" in response:
-            self.wfile.write(bytes('''{ "error": "%s" }\n''' % response,'utf-8'))
+        if "Failed" in response or "error" in response[:20]:
+            self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
         elif response.startswith('{'):
-            self.wfile.write(bytes(response+"\n",'utf-8'))
+            self.wfile.write(bytes(response,'utf-8'))
         else:
-            self.wfile.write(bytes('''{ "ok": "%s" }\n''' % response,'utf-8'))
-        cprint ("\t"+response,"white")
+            self.wfile.write(bytes('''{ "ok": "%s" }''' % response,'utf-8'))
+        cprint (response+"\n","white")
         print("")
 
 
@@ -377,6 +428,7 @@ def sendCommand(commandName,params):
             #- Otherwise, it's not a toggle and send it through
             if settingsFile.has_option('Commands', newCommandName):
                 return "fail: %s was ignored" % commandName
+        #print ("Commandname: %s Command: %s" % (commandName,command))
         if command is False:
             result = macros.checkMacros(commandName,params)
         else:
@@ -414,7 +466,7 @@ def learnCommand(commandName, params):
         with devices.SettingsLock:
             settings.backupSettings()
             try:
-                ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
+                ControlIniFile = open(os.path.join(settings.applicationDir, 'settings.ini'), 'w')
                 if not settingsFile.has_section(sectionName):
                     settingsFile.add_section(sectionName)
                 settingsFile.set(sectionName, commandName, str(decodedCommand,'utf8'))
@@ -463,7 +515,7 @@ def setStatus(commandName, status, params):
         with devices.SettingsLock:
             if not settingsFile.has_section(sectionName):
                 settingsFile.add_section(sectionName)
-            ControlIniFile = open(path.join(settings.applicationDir, 'settings.ini'), 'w')
+            ControlIniFile = open(os.path.join(settings.applicationDir, 'settings.ini'), 'w')
             settingsFile.set(sectionName, commandName, str(status))
             settingsFile.write(ControlIniFile)
             ControlIniFile.close()

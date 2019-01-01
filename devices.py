@@ -11,6 +11,7 @@ DevList = []
 Dev = defaultdict(dict)
 Modlist = {}
 DeviceByRoom = {}
+CustomDash = False
 
 FuncDiscover = []
 FuncReadSettings = []
@@ -35,6 +36,18 @@ def addRoom(device,name):
 
 def setHome(device):
     DeviceByRoom['House'] = device
+
+def getHome():
+    if 'House' in DeviceByRoom:
+        return DeviceByRoom['House']
+    return Dev['default']
+
+def setDash(html):
+    global CustomDash
+    CustomDash = html
+
+def getDash():
+    return CustomDash
 
 def discover (settings,timeout,listen,broadcast):
     for func in FuncDiscover:

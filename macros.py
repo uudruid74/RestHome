@@ -83,6 +83,19 @@ class EventList(object):
                 else:
                     node = node.nextNode
             return None
+    def deleteAll(self,name):
+        with self.lock:
+            node = self.begin
+            if node == None:
+                return None
+            while node.name.startswith(name):
+                self.begin = node.nextNode
+            while node.nextNode != None:
+                if node.nextNode.name.startswith(name):
+                    found = node.nextNode
+                    node.nextNode = found.nextNode
+                node = node.nextNode
+            return None
     def delete(self,name):
         with self.lock:
             node = self.begin
@@ -179,8 +192,10 @@ def checkMacros(OcommandFromSettings,query):
     #print ("checkMacros: %s" % OcommandFromSettings)
     if OcommandFromSettings.startswith('.'):
         commandFromSettings = OcommandFromSettings[1:]
-    else:
+    elif OcommandFromSettings.startswith('MACRO'):
         commandFromSettings = OcommandFromSettings
+    else:
+        return False
 
     if commandFromSettings.startswith("PRINT "):
         cprint (expandVariables(commandFromSettings[6:],query),"white")
@@ -300,7 +315,7 @@ def exec_macro(commandFromSettings,query):
                     if command == "logic":
                         execute_logicnode_raw(newquery)
                     elif command == "event":
-                        execute_event_raw("event-"+time.time(),newquery)
+                        execute_event_raw(newquery['device']+"-"+str(time.time()),newquery)
                     else:
                         if checkConditionals(command,newquery) is False:
                            sendCommand(command,newquery)
@@ -448,19 +463,21 @@ def execute_radio(command,query):
     return status
 
 def execute_event_raw(command,query):
+    #print ("RAW: %s" % command)
     try:
         newcommand = expandVariables(query['command'],query)
         delay = 0.0
         if 'seconds' in query:
-            delay += float(expandVariables(query['seconds'],query))
+            delay += float(expandVariables(str(query['seconds']),query))
         if 'minutes' in query:
-            delay += float(expandVariables(query['minutes'],query)) * 60
+            delay += float(expandVariables(str(query['minutes']),query)) * 60
         if 'hours' in query:
-            delay += float(expandVariables(query['hours'],query)) * 3600
+            delay += float(expandVariables(str(query['hours']),query)) * 3600
         eventList.add(command,delay,newcommand,query)
         return command
     except Exception as e:
         cprint ("EVENT Failed: %s" % e,"yellow")
+        traceback.print_exc()
     return False
 
 def execute_event(command,query):

@@ -18,7 +18,7 @@ import time
 #- that is run every "poll" (default 1 hr, on the hour) minutes or
 #- you can specify times to run commands, such as "04_30" to run
 #- a command at 4:30 am.   Each execution will have variables set:
-#- $month, $day, $hours, $minutes, $seconds, $weekday, and $isWeekday
+#- $month, $day, $chours, $cmins, $csecs, $weekday, and $isWeekday
 #- The final is a boolean
 
 try:
@@ -39,9 +39,9 @@ def settimeinfo(params):
     timeinfo = time.localtime()
     params['month'] = timeinfo.tm_mon
     params['day'] = timeinfo.tm_mday
-    params['hours'] = timeinfo.tm_hour
-    params['minutes'] = timeinfo.tm_min
-    params['seconds'] = timeinfo.tm_sec
+    params['chours'] = timeinfo.tm_hour
+    params['cmins'] = timeinfo.tm_min
+    params['csecs'] = timeinfo.tm_sec
     params['weekday'] = weekdays[timeinfo.tm_wday]
     params['isWeekday'] = "True"
     if timeinfo.tm_wday > 4:
@@ -155,6 +155,7 @@ def setStatus(deviceName,commandName,params,old,new):
             device.enabled = True
         else:
             device.enabled = False
+            macros.eventList.deleteAll(deviceName)
         return True
     return False
 
@@ -186,7 +187,7 @@ def pollCallback(devicename,argname,command,params):
     if polltime != 86400:
         nextevent = round(int(now / polltime) + 1) * polltime - now + 1
     else:
-        nextevent = nextevent - int(params['seconds'])
+        nextevent = nextevent - int(params['msecs'])
     macros.eventList.add("POLL_"+devicename+"_"+argname,nextevent,command,params)
 
     if device.enabled and (device.weekday == params['weekday'] or device.weekday == '*'):
