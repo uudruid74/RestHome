@@ -1,8 +1,4 @@
-
-from socket import error as SocketError
-import errno
 import devices
-from termcolor import cprint
 from os import path
 import settings
 import threading
@@ -11,9 +7,11 @@ import traceback
 import time
 import json
 import re
+from devices import cprint
 
 try:
     import requests
+    from requests.exceptions import ConnectionError
 
     devices.Modlist['requests'] = True
 
@@ -90,9 +88,19 @@ def sendCommand(command,device,deviceName,params):
                 headers = { 'Content-Type': 'application/json' }
                 if 'value1' in params:
                     print ("value1 = %s" % params['value1'])
-                r = requests.post(url=URL,json=params,headers=headers)
+                r = requests.post(url=URL,json=params,headers=headers,timeout=4)
             else:
-                r = requests.get(url=URL,data=params)
+                r = requests.get(url=URL,data=params,timeout=4)
+            if r.status_code != 200:
+                if 'retries' not in params:
+                    params['retries'] = 0
+                if params["retries"] > 2:
+                    cprint ("%s (Error %s): FAILED" % (params['command'],r.status_code),"red")
+                    return False
+                cprint ("%s (Error %s): Waiting 2s ..." % (params['command'],r.status_code),"yellow")
+                params["retries"] = params["retries"] + 1
+                time.sleep(2)
+                return sendCommand(command,device,deviceName,params)
             result = r.text
             if hasattr(device,'find'):
                 #print ("Finding regex: %s" % device.find)
@@ -104,25 +112,25 @@ def sendCommand(command,device,deviceName,params):
                             globalSetStatus(var,match.group(var),params)
                     result = "FOUND: " + match.group()
                 else:
-                    result = "NOT FOUND.  Response: " + result[:60]
-            cprint("%s/%s\n%s" % (deviceName,params['command'],result[:80]),"green")
+                    result = "NOT FOUND.  Response: " + result[:40]
+            cprint("  # %s/%s: %s" % (deviceName,params['command'],result[:60]),"green")
             time.sleep(float(params['deviceDelay']))
             return True
         return False
-    except SocketError as e:
+    except ConnectionError as e:
         if 'retries' not in params:
             params['retries'] = 0
-        if e.errno != errno.ECONNRESET or params["retries"] > 2:
-            cprint("Unknown Error: %s %s retries=%s" % (e, e.errno,params['retries']), "red")
+        if params["retries"] > 2:
+            print ("Retries Exceeded");
             raise # Not error we are looking for
         else:
             params["retries"] = params["retries"] + 1
-            cprint ("CONNECTION RESET(%s): Waiting 2s ..." % params['command'])
-            sleep(2)
+            cprint ("CONNECTION ERROR(%s): Waiting 2s ..." % params['command'],"yellow")
+            time.sleep(2)
             return sendCommand(command,device,deviceName,params)
     except Exception as e:
         cprint("url sendCommand: %s to %s failed: %s" % (params['command'],deviceName,e),"yellow")
-        traceback.print_exc()
+#        traceback.print_exc()
         return False
 
 

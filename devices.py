@@ -1,6 +1,7 @@
 import threading
-from termcolor import cprint
+import termcolor
 from collections import defaultdict
+import threading
 
 global Dev
 global DevList
@@ -18,6 +19,25 @@ FuncReadSettings = []
 FuncStartup = []
 FuncShutdown = []
 SettingsLock = threading.RLock()
+LastThreadId = 0
+LastColor = "grey"
+LastEnd = "\n"
+
+def cprint(body,color="grey",end="\n"):
+    global LastThreadId
+    global LastColor
+    global LastEnd
+    thread = threading.get_ident()
+    try:
+        if LastThreadId != thread or LastColor != color:
+            if LastEnd != "\n":
+                print ("")
+    except Exception as e:
+        pass
+    LastThreadId = thread
+    LastColor = color
+    LastEnd = end
+    termcolor.cprint(body,color=color,end=end)
 
 def addDiscover(func):
     FuncDiscover.append(func)

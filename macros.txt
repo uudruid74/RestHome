@@ -194,7 +194,9 @@ The following keywords are defined
 
             If you want the named buttons to simply send the command, you can
             list all of these "pass-through" commands in a single parameter
-            called "commands".  They are space separated.
+            called "commands".  They are space separated.  Basically, if you
+            call mybutton(B) and "B" is listed in "commands", then "B" is sent
+            to the device.
 
             A command called "else" is run if no other "on" commands are
             available.  If "else" is not defined, the variable associated
@@ -204,11 +206,20 @@ The following keywords are defined
             in state (before the off, but not sent if no change).  And a
             "post" command that is sent after all changes other than "error"
 
+            The RADIO button may also be used for button "sequences".  This
+            means that all buttons are pushed or unpushed in a specific order.
+            You can think of this as going up and down a ladder.  The sequence
+            is defined by listin the values as "sequence".  For example, if you
+            have "sequence = A B C D E F G" and the current value is C and you
+            push F, then D E and F will all be executed, in that order.  If you
+            then push B, you get "off" events for F, E, D, and C, in that order.
+
+            You may define a "device" and a "deviceDelay" as well.
+
 
 The LOGIC Section is the ultimate / universal conditional.  It can take many
 forms, so we'll devote a bit more area to this one:
-        test        The variable name to test is not optional
-        rtest       "Raw" Test is an actual value to test, not variable
+        test        The value to test is not optional
         compare     If a compare variable is listed, it's compared with the 
                     test.
 

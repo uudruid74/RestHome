@@ -1,11 +1,11 @@
 import devices
-from termcolor import cprint
 from os import path
 import threading
 import settings
 import macros
 import traceback
 import time
+from devices import cprint
 
 try:
     import Adafruit_BBIO.ADC as ADC
@@ -53,7 +53,7 @@ def readSettings(settingsFile,devname):
                         sensor.poll = float(settingsFile.get(section,"poll")) * 60
                     else:
                         sensor.poll = 300.0       #- 5 minutes
-                    if settingsFile.has_option(section,"trigger"):
+                    if settingsFile.has_option(section ,"trigger"):
                         sensor.trigger = trigger = settingsFile.get(section, "trigger")
                         initialparams = {}
                         initialparams['device'] = devname

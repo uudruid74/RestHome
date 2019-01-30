@@ -1,11 +1,11 @@
 import devices
-from termcolor import cprint
 from Crypto.Cipher import AES
 from os import path
 import threading
 import settings
 import macros
 import traceback
+from devices import cprint
 
 try:
 #- Any early startup code for these devices

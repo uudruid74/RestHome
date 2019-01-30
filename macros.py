@@ -3,12 +3,13 @@ import string
 import time
 from platform import system as system_name
 from math import ceil as ceiling
-from termcolor import cprint
 import subprocess
 import json
 import threading
 import sys
 import traceback
+import devices
+from devices import cprint
 
 def append(a,b):
     if a.strip() == '':
@@ -69,7 +70,7 @@ class EventList(object):
         with self.lock:
             found = self.find(name)
             if found:
-                cprint("Deleting old event: %s=%s" % (found.name,found.command),"yellow")
+                #cprint("Deleting old event: %s=%s" % (found.name,found.command),"yellow")
                 ret = self.delete(name)
             newparams = params.copy()
             newparams['serialize'] = True
@@ -198,7 +199,7 @@ def checkMacros(OcommandFromSettings,query):
         return False
 
     if commandFromSettings.startswith("PRINT "):
-        cprint (expandVariables(commandFromSettings[6:],query),"white")
+        cprint ("  > "+expandVariables(commandFromSettings[6:],query),"white")
         return True
     elif commandFromSettings == "NOP" or commandFromSettings.startswith("#"):
         return True
@@ -240,7 +241,9 @@ def checkMacros(OcommandFromSettings,query):
     elif commandFromSettings.startswith("MACRO ") or OcommandFromSettings.startswith(".") or '(' in commandFromSettings:
         if 'serialize' in query and query['serialize']:
             #print ("Executing %s" % commandFromSettings)
-            exec_macro(commandFromSettings,query)
+            deviceName = query["device"]
+            with devices.Dev[deviceName]['Lock']:
+                exec_macro(commandFromSettings,query)
         else:
             #print ("Making Event for %s" % commandFromSettings)
             eventList.add(query['command'],query["deviceDelay"],OcommandFromSettings,query)
@@ -272,6 +275,7 @@ def exec_macro(commandFromSettings,query):
                 paramString = command[command.find("(")+1:command.rfind(")")]
                 command = command[:command.find("(")]
                 if command == "set":
+                    print ("SET called on %s" % paramString)
                     if ',' in paramString:
                         (paramString,value) = paramString.split(',')
                     else:
@@ -293,11 +297,11 @@ def exec_macro(commandFromSettings,query):
                 elif command == "cancel":
                     cancelEvent(paramString)
                 elif command == "print":
-                    cprint ("\n" + expandVariables(getStatus(paramString,query),query),"white")
+                    cprint ("  > "+expandVariables(getStatus(paramString,query),query),"white")
                 elif command.startswith('timer'):
                     minutes = "0" + command[5:]
                     seconds = float(minutes) * 60 + query['deviceDelay']
-                    eventList.add("timer-"+minutes+"-"+str(time.time()),seconds,paramString,newquery)
+                    eventList.add("timer-"+paramString,seconds,"."+paramString,newquery)
                 else:
                     #cprint("command = %s, param = %s" % (command,paramString), "magenta")
                     if ',' in paramString and '=' in paramString:
@@ -325,6 +329,7 @@ def exec_macro(commandFromSettings,query):
                 if actualCommand == "sleep":
                     time.sleep(float(repeatAmount))
                 else:
+                    cprint ("\t","green",end='')
                     for x in range(0,int(repeatAmount)):
                         cprint (actualCommand,"green",end=' ')
                         sys.stdout.flush()
@@ -421,42 +426,56 @@ def execute_radio(command,query):
         if settingsFile.has_option(section,'device'):
             query = query.copy()
             query['device'] = settingsFile.get(section,'device')
+            if settingsFile.has_option(section,'deviceDelay'):
+                query['deviceDelay'] = settingsFile.get(section,'deviceDelay')
         newstatus = query["button"]
         if (status == newstatus):
             #cprint ("RADIO button %s already at state = %s" % (command,status),"cyan")
             return status
         else:
-            if status == "off" or status == "poweroff":
-                off = "poweroff"
-            else:
-                off = status + "off"
             if settingsFile.has_option(section,"pre"):
                 sendCommand(settingsFile.get(section,"pre"),query)
-                time.sleep(query["deviceDelay"])
-            if settingsFile.has_option(section,off):
-                offCommand = settingsFile.get(section,off)
-                if offCommand:
-                    sendCommand(offCommand,query)
-                    time.sleep(query["deviceDelay"])
-            on = newstatus
-            if settingsFile.has_option(section,"commands"):
-                if on in settingsFile.get(section,"commands"):
-                    sendCommand(on,query)
-            elif settingsFile.has_option(section,on):
-                onCommand = settingsFile.get(section,on)
-                if onCommand:
-                    sendCommand(onCommand,query)
-            elif settingsFile.has_option(section,"else"):
-                newstatus = 'else'
-                onCommand = settingsFile.get(section,"else")
-                if onCommand:
-                    sendCommand(onCommand,query)
+
+            if settingsFile.has_option(section,"sequence"):
+                sequence = settingsFile.get(section,"sequence").split()
+                start = sequence.index(status)
+                end = sequence.index(newstatus)
+                print ("start: %s end: %s" % (start,end))
+                if end > start:
+                    for i in range(start,end):
+                        onCommand = settingsFile.get(section,sequence[i])
+                        sendCommand(onCommand,query)
+                else:
+                    for i in range(start,end,-1):
+                        offCommand = settingsFile.get(section,sequence[i]+"off")
+                        sendCommand(offCommand,query)
             else:
-                newstatus = 'error'
+                if status == "off" or status == "poweroff":
+                    off = "poweroff"
+                else:
+                    off = status + "off"
+                if settingsFile.has_option(section,off):
+                    offCommand = settingsFile.get(section,off)
+                    if offCommand:
+                        sendCommand(offCommand,query)
+                on = newstatus
+                if settingsFile.has_option(section,"commands"):
+                    if on in settingsFile.get(section,"commands"):
+                        sendCommand(on,query)
+                elif settingsFile.has_option(section,on):
+                    onCommand = settingsFile.get(section,on)
+                    if onCommand:
+                        sendCommand(onCommand,query)
+                elif settingsFile.has_option(section,"else"):
+                    newstatus = 'else'
+                    onCommand = settingsFile.get(section,"else")
+                    if onCommand:
+                        sendCommand(onCommand,query)
+                else:
+                    newstatus = 'error'
             setStatus(command,newstatus,query)
             if settingsFile.has_option(section,"post") and newstatus != 'error':
                 sendCommand(settingsFile.get(section,"post"),query)
-                time.sleep(query["deviceDelay"])
         return command
     except Exception as e:
         cprint ("RADIO %s Failed: %s" % (command,e),"yellow")
@@ -495,22 +514,17 @@ def execute_event(command,query):
 
 def execute_logicnode_raw(query):
     try:
-        if "test" in query:
-            value = getStatus(query["test"],query)
-        elif "rtest" in query:
-            value = query["rtest"]
-        else:
-            return False
+        value = expandVariables(query['test'],query)
         newcommand = None
         if str(value) in query:
             newcommand = expandVariables(query[str(value)],query)
         elif value.isnumeric():
             if value == "1" and "on" in query:
                 newcommand  = expandVariables(query["on"],query)
-                return sendCommand(newcommand,query)
+                return sendCommand("." + newcommand,query)
             elif value == "0" and "off" in query:
                 newcommand = expandVariables(query["off"],query)
-                return sendCommand(newcommand,query)
+                return sendCommand("." + newcommand,query)
             value = float(value)
             if "compare" in query:
                 compareVar = expandVariables(query["compare"],query)
@@ -540,12 +554,12 @@ def execute_logicnode_raw(query):
             if "else" in query:
                 newcommand = expandVariables(query["else"],query)
         if newcommand is not None:
-            return sendCommand(newcommand,query)
+            return sendCommand("." + newcommand,query)
         return False
     except Exception as e:
         if "error" in query:
             newcommand = expandVariables(query['error'],query)
-            return sendCommand(newcommand,query)
+            return sendCommand("." + newcommand,query)
         cprint ("LOGIC Failed: %s" % e, "yellow")
         traceback.print_exc()
         return False
@@ -559,8 +573,6 @@ def execute_logicnode(command,query):
     newquery['command'] = command
     if settingsFile.has_option(section,"test"):
         newquery["test"] = expandVariables(settingsFile.get(section,"test"),query)
-    elif settingsFile.has_option(section,"rtest"):
-        newquery["rtest"] = expandVariables(settingsFile.get(section,"rtest"),query)
     else:
         cprint ("LOGIC Failed: A test value is required","yellow")
         return

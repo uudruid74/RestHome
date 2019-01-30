@@ -11,7 +11,7 @@ settingsINI = path.join(applicationDir, 'settings.ini')
 settings = configparser.ConfigParser()
 settings.read(settingsINI)
 
-DiscoverTimeout = GlobalTimeout = 20
+DiscoverTimeout = GlobalTimeout = 40
 devices.Dev['default'] = None
 if settings.has_option('General', 'Timeout'):
     DiscoverTimeout = GlobalTimeout = int(settings.get('General', 'Timeout').strip())

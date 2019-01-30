@@ -1,11 +1,11 @@
 import devices
-from termcolor import cprint
 import os
 import threading
 import settings
 import macros
 import traceback
 import time
+from devices import cprint
 
 try:
     devices.Modlist['logger'] = True

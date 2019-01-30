@@ -14,7 +14,7 @@ Real PDF Documentation (source is in LyX) on the programming options is underway
 
 System Features
 ---------------
-- **Multithreade**      Responsive, handles multiple clients, programmable events and timers
+- **Multithreaded**     Responsive, handles multiple clients, programmable events and timers
 - **Programmable**      Macro Language contains variables, loops, conditions, and shell integration
 - **IFTTT Integration** Send or Recieve commands from IFTTT to control anything IFTTT can control
 - **Virtual Devices**   A single broadlink can control multiple virtual devices
@@ -26,7 +26,31 @@ System Features
 - **Security**          Understands SSL proxies with appropriate whitelist security
 - **Definable UI**      The "testing" UI is just starting.  Currently view only while I standardize controls some
 
-The programmability includes passing variables to/from URLs, setting persistent status variables, radio buttons (like a special switch with internal state), timers (parallel threads), triggers (perform actions when variables change), and logic nodes.  A logic node can be used to implement conditionals, switch statements, loops, and other control flow.
+Theory Of Operation
+-------------------
+RestHome was designed to be lightweight and easy to configure.  Rather than a
+complex programming language or configuration syntax, RestHome uses a simple
+INI file to control its operation.  The concepts of "Scenes" has been replaced
+with "Macros".  Basically, the INI file defines Devices, Commands for those
+devices, and Status variables for those commands to use.  Commands are simply
+sent to devices as the data given in the command definition.  If the command
+definition begins with a period or the word MACRO, it should be a list of
+command names.  The list is done in order.  Some built-in commands may be 
+pre-defined such as sleeping (in seconds), creating timer events (in minutes, 
+but fractions are allowed), and simple logic.
+
+Programmability is through simple node-based logic, the "Radio" button sections
+(see macros.txt), triggers (do something any time a variable is written), and 
+various others, such as PING, WOL, etc.  These simple yet powerful constructs
+can emulate a number of common programming tasks.
+
+Actual devices are through a plugin system.  Currently, only plugins for
+broadlink devices, webhook/rest based devices (including all of IFTTT), LOG
+files, and virtual devices are supported.  Creating new plugins is done by
+creating a new file defining a few callback functions in python and dropping
+it into the plugin directory.  A simple UI is underway as well as more plugins,
+including native Google Assistant, Chromecast, RRD Tool, MQTT, and possibly an
+"Array" plugin.
 
 
 Example usage
@@ -39,7 +63,7 @@ After viewing the sample settings.ini, erase it! The system will autodetect your
 The [General] section contains the following optional parameters
 - **ServerAddress** = IP to listen on, rather than 0.0.0.0
 - **ServerPort** = listen port (defaults to 8080)
-- **Timeout** = Default timeout for network operations in tenths of a second
+- **Timeout** = Default timeout for network operations in seconds (default 8)
 - **DiscoverTimeout** = Device discovery timeout, defaults to the same as Timeout
 - **LearnFrom** = IP addresses that can issue new commands to learn from (default is any)
 - **BroadcastAddress** = a pending patch to python-broadlink will allow device discover to use a specified broadcast IP
@@ -47,7 +71,7 @@ The [General] section contains the following optional parameters
 - **AllowOverwrite** = if set to anything, allow learned commands to overwrite an existing entry.  The default is to deny a command that is already learned
 - **RestrictAccess** = restrict all operations to this list of IPs
 - **Password** = allow password-protected POST operations from any address
-- **MaxThreads** = maximum number of processing threads, defaults to 8
+- **MaxThreads** = maximum number of processing threads, defaults to 16
 - **Hostname** = remote hostname for forming URLs in local media and UI tools
 - **House** = name of a device representing the entire house
 

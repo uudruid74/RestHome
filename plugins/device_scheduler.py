@@ -1,24 +1,23 @@
 import devices
-from termcolor import cprint
 from os import path
 import threading
 import settings
 import macros
 import traceback
 import time
-
+from devices import cprint
 
 #- The Scheduler is a sort of virtual device that can implement a variety
 #- of scheduler options.  Each "device" is a schedule that can be 
 #- enabled or disabled separately.  You may use setStatus/enabled/0
 #- or sendCommand/enable and sendCommand/disable to change the
 #- initial setting (enabled unless specified otherwise).  You may
-#- specify a "weekday" parameter to restrict the schedule to a
+#- specify an "OnlyOn" parameter to restrict the schedule to a
 #- particular day of the week.  Each schedule may have a "trigger"
 #- that is run every "poll" (default 1 hr, on the hour) minutes or
 #- you can specify times to run commands, such as "04_30" to run
 #- a command at 4:30 am.   Each execution will have variables set:
-#- $month, $day, $chours, $cmins, $csecs, $weekday, and $isWeekday
+#- $month, $day, $HH, $mm, $ss, $weekday, and $isWeekday
 #- The final is a boolean
 
 try:
@@ -39,9 +38,9 @@ def settimeinfo(params):
     timeinfo = time.localtime()
     params['month'] = timeinfo.tm_mon
     params['day'] = timeinfo.tm_mday
-    params['chours'] = timeinfo.tm_hour
-    params['cmins'] = timeinfo.tm_min
-    params['csecs'] = timeinfo.tm_sec
+    params['HH'] = timeinfo.tm_hour
+    params['mm'] = timeinfo.tm_min
+    params['ss'] = timeinfo.tm_sec
     params['weekday'] = weekdays[timeinfo.tm_wday]
     params['isWeekday'] = "True"
     if timeinfo.tm_wday > 4:
@@ -76,6 +75,7 @@ def readSettings(settingsFile,devname):
             device = type('', (), {})()
             device.varlist = []
             initialparams = {}
+            statusvars = devname + " Status"
             if settingsFile.has_option(devname,"Device"):
                 initialparams['device'] = settingsFile.get(devname,"Device")
             else:
@@ -85,24 +85,22 @@ def readSettings(settingsFile,devname):
             device.onlyWeekdays = False
             device.onlyWeekends = False
             device.enabled = True
-            if settingsFile.has_option(devname,"enabled"):
-                enabled = settingsFile.get(devname,"enabled")
+            device.weekday = '*'
+            if settingsFile.has_option(statusvars,"only"):
+                enabled = settingsFile.get(statusvars,"only")
                 if enabled.lower() == "weekdays":
                     device.onlyWeekdays = True
                 elif enabled.lower() == "weekends":
                     device.onlyWeekends = True
                 else:
-                    device.enabled = bool(enabled)
-            if settingsFile.has_option(devname,"poll"):
-                device.poll = float(settingsFile.get(devname,"poll")) * 60
+                    device.weekday = settingsFile.get(statusvars,"only")
+
+            if settingsFile.has_option(statusvars,"poll"):
+                device.poll = float(settingsFile.get(statusvars,"poll")) * 60
             else:
                 device.poll = 3600.0       #- 60 minutes
-            if settingsFile.has_option(devname,"weekday"):
-                device.weekday = settingsFile.get(devname,"weekday")
-            else:
-                device.weekday = '*'
 
-            for var in settingsFile.options(devname):
+            for var in settingsFile.options(statusvars):
                 if '_' not in var:
                     continue
                 (hh,mm) = var.split('_')
@@ -110,11 +108,11 @@ def readSettings(settingsFile,devname):
                 nextevent = nexttime - time.time()
                 if nextevent < 0:
                     nextevent += 86400 #- Seconds in a day
-                macros.eventList.add("POLL_"+devname+"_"+var,nextevent,settingsFile.get(devname,var),initialparams)
+                macros.eventList.add("POLL_"+devname+"_"+var,nextevent,settingsFile.get(statusvars,var),initialparams)
                 device.varlist.append(var)
 
-            if settingsFile.has_option(devname,"trigger"):
-                device.trigger = settingsFile.get(devname, "trigger")
+            if settingsFile.has_option(statusvars,"trigger"):
+                device.trigger = settingsFile.get(statusvars, "trigger")
                 initialparams['polltime'] = device.poll
                 macros.eventList.add("POLL_"+devname+"_trigger",2.0,device.trigger,initialparams)
         else:
@@ -187,7 +185,7 @@ def pollCallback(devicename,argname,command,params):
     if polltime != 86400:
         nextevent = round(int(now / polltime) + 1) * polltime - now + 1
     else:
-        nextevent = nextevent - int(params['msecs'])
+        nextevent = nextevent - int(params['ss'])
     macros.eventList.add("POLL_"+devicename+"_"+argname,nextevent,command,params)
 
     if device.enabled and (device.weekday == params['weekday'] or device.weekday == '*'):

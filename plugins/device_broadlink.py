@@ -1,5 +1,4 @@
 import devices
-from termcolor import cprint
 from Crypto.Cipher import AES
 from os import path
 import threading
@@ -8,6 +7,7 @@ import macros
 import binascii
 import traceback
 import time
+from devices import cprint
 
 try:
     import broadlink

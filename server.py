@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 #- Note python 3.6 or later now required!
-from termcolor import cprint
 import os
 from importlib import reload
 import devices
@@ -25,8 +24,9 @@ import pdb
 import socketserver
 import http.server
 import mimetypes
+from devices import cprint
 
-THROTTLE = 4    #- spawn per second
+THROTTLE = 8    #- spawn per second
 
 from plugins import *
 
@@ -40,15 +40,20 @@ def reloadAll():
     reload(device_virtual)
     reload(settings)
 
+class ThreadId(threading.local):
+    def __init__(self):
+        self.val = {}
+
 class Thread(threading.Thread):
     def __init__(self, i, sock, addr, timeout):
+        global threadid
         threading.Thread.__init__(self)
-        self.i = i
+        self.threadid = i
         self.sock = sock
         self.addr = addr
         self.timeout = timeout
         self.daemon = True
-        time.sleep(self.i/THROTTLE)
+        time.sleep(i/THROTTLE)
         self.start()
 
     def run(self):
@@ -57,12 +62,14 @@ class Thread(threading.Thread):
         # Prevent the HTTP server from re-binding every handler.
         # https://stackoverflow.com/questions/46210672/
         httpd.socket = self.sock
+        httpd.threadid = self.threadid
         httpd.server_bind = self.server_close = lambda self: None
         while not InterruptRequested.is_set():
+#            print ("Start thread %s" % self.threadid)
             timer = min(self.timeout,macros.eventList.nextEvent())
             while timer < 1:
                 event = macros.eventList.pop()
-                cprint ("EVENT (%s) %s/%s" % (datetime.datetime.now().strftime("%I:%M:%S"),event.params['device'],event.name),"blue")
+                cprint ("  = EVENT (%s) %s/%s" % (datetime.datetime.now().strftime("%I:%M:%S"),event.params['device'],event.name),"blue")
                 if event.name.startswith("POLL_"):
                     (POLL,devicename,argname) = event.name.split('_',2)
                     value = devices.Dev[devicename]["pollCallback"](devicename,argname,event.command,event.params)
@@ -72,14 +79,14 @@ class Thread(threading.Thread):
                         sendCommand(event.command,event.params)
                 else:
                     sendCommand(event.command,event.params)
-                print ('')
                 timer = min(self.timeout,macros.eventList.nextEvent())
             httpd.timeout = timer
             httpd.handle_request()
-
+            time.sleep(MaxThreads/THROTTLE)
+#            print ("End thread %s" % self.threadid)
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    Parameters = collections.defaultdict(lambda : ' ')
+    # Parameters = collections.defaultdict(lambda : ' ')
     def _set_headers(self,path):
         if path == '/':
             self.send_response(301)
@@ -98,12 +105,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def client_ip(self):
-        remote_ip = self.headers.get('X-Forwarded-For', self.headers.get('X-Real-Ip', self.client_address[0]))
+        if hasattr(self,"headers"):
+            remote_ip = self.headers.get('X-Forwarded-For', self.headers.get('X-Real-Ip', self.client_address[0]))
+        else:
+            remote_ip = self.client_address[0]
         return remote_ip
 
     def log_message(self, format, *args):
-        sys.stderr.write("%s - - [%s] %s\n" %
-            (self.client_ip(),self.log_date_time_string(),format%args))
+        sys.stderr.write("%s/%s - - [%s] %s\n" %
+            (str(self.server.threadid).rjust(2),self.client_ip(),self.log_date_time_string(),format%args))
 
     def do_OPTIONS(self):
         self.send_response(200, "ok")
@@ -113,8 +123,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        self.Parameters = collections.defaultdict(lambda : ' ')
         try:
-            if GlobalPassword:
+            if GlobalPassword and ('/ui/' not in self.path and 'getIcon' not in self.path and self.path != '/favicon.ico'):
                 try:
                     if RestrictAccess and self.client_ip() not in RestrictAccess:
                         return self.access_denied()
@@ -123,19 +134,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     cprint ("Error: %s" % e,"yellow")
                     traceback.print_exc()
                     self.password_required()
+            else:
+                return self.messageHandler()
         except NameError:                   #- No security specified
             self.messageHandler()
 
     def do_POST(self):
+        self.Parameters = collections.defaultdict(lambda : ' ')
         password = ''
         try:
             content_len = int(self.headers.get('content-length', 0))
-            self.Parameters.update(json.loads(self.rfile.read(content_len).decode("utf-8")))
+            JSONbody = self.rfile.read(content_len).decode("utf-8")
+            #print ("POST body: %s" % JSONbody)
+            self.Parameters.update(json.loads(JSONbody))
             password = self.Parameters['password'];
         except:
             traceback.print_exc()
             pass
         try:
+            if not GlobalPassword:
+                return self.messageHandler()
             if GlobalPassword and GlobalPassword == password:
                 return self.messageHandler()
             else:
@@ -146,16 +164,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def password_required(self):
         response = "POST Password required from %s" % self.client_ip()
+        self._set_headers(self.path)
         self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
         cprint (response,"red")
-        self.close_connection = 1
+        #self.close_connection = True
         return False
 
     def access_denied(self):
         response = "Client %s is not allowed to use GET!" % self.client_ip()
+        self._set_headers(self.path)
         self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
         cprint (response,"red")
-        self.close_connection = 1
+        #self.close_connection = True
         return False
 
     def messageHandler(self):
@@ -172,6 +192,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             for index in range(0,len(params),2):
                 self.Parameters[params[index]] = params[index+1]
         paths = re.split('[//=]+',self.path)
+
         if 'learnCommand' in self.path:
             try:
                 if self.client_ip() not in LearnFrom:
@@ -208,6 +229,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 response = commandName
             else:
                 response = result
+
+        elif 'getType' in self.path:
+            if paths[2] == 'getType':
+                varName = paths[3]
+                deviceName = paths[1]
+            else:
+                varName = paths[2]
+                deviceName = devices.Dev['default']
+            self.Parameters["device"] = deviceName
+            (status,varlist) = getType(varName,self.Parameters)
+            if (status):
+                if varlist is None:
+                    response = '''{ "%s": "%s" }''' % (varName,status)
+                else:
+                    response = '''{\n\t"%s": "%s",\n\t"%s": "%s"\n}''' % (varName,status,status,varlist)
+            else:
+                response = "Failed: Unknown command - %s" % varName
 
         elif 'getStatus' in self.path:
             if paths[2] == 'getStatus':
@@ -255,23 +293,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         #- Should UI based commands really be local only?
         elif 'listEvents' in self.path:
-            if RestrictAccess and self.client_ip() not in RestrictAccess:
-                return self.access_denied()
+#            if RestrictAccess and self.client_ip() not in RestrictAccess:
+#                return self.access_denied()
             response = macros.eventList.dump()
 
         elif 'listDevices' in self.path:
-            if RestrictAccess and self.client_ip() not in RestrictAccess:
-                return self.access_denied()
+#            if RestrictAccess and self.client_ip() not in RestrictAccess:
+#                return self.access_denied()
             response = devices.dumpDevices()
 
         elif 'listRooms' in self.path:
-            if RestrictAccess and self.client_ip() not in RestrictAccess:
-                return self.access_denied()
+#            if RestrictAccess and self.client_ip() not in RestrictAccess:
+#                return self.access_denied()
             response = devices.dumpRooms()
 
         elif 'getIcon' in self.path:
-            if RestrictAccess and self.client_ip() not in RestrictAccess:
-                return self.access_denied()
+#            if RestrictAccess and self.client_ip() not in RestrictAccess:
+#                return self.access_denied()
             devname,exten = os.path.splitext(paths[len(paths)-1])
             pathname = "ui/" + settings.DefaultUI + '/icons/'
             socket = self.connection
@@ -288,8 +326,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
 
         elif 'getCustomDash' in self.path:
-            if RestrictAccess and self.client_ip() not in RestrictAccess:
-                return self.access_denied()
+#            if RestrictAccess and self.client_ip() not in RestrictAccess:
+#                return self.access_denied()
             retval = devices.getDash()
             if (retval is not False):
                 retval = macros.expandVariables(retval,self.Parameters)
@@ -298,13 +336,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 response = '''{ "error": "No Dash Found" }'''
 
         elif 'getHomeName' in self.path:
-            if RestrictAccess and self.client_ip() not in RestrictAccess:
-                return self.access_denied()
+#            if RestrictAccess and self.client_ip() not in RestrictAccess:
+#                return self.access_denied()
             response = '''{ "ok": "%s" }''' % devices.getHome()
 
         elif 'listStatus' in self.path:
-            if RestrictAccess and self.client_ip() not in RestrictAccess:
-                return self.access_denied()
+#            if RestrictAccess and self.client_ip() not in RestrictAccess:
+#                return self.access_denied()
             if len(paths) > 2 and paths[2] == 'listStatus':
                 section = paths[1] + " Status"
             else:
@@ -316,6 +354,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             response += '''\n}'''
 
         elif 'deleteEvent' in self.path:
+            if RestrictAccess and self.client_ip() not in RestrictAccess:
+                return self.access_denied()
             if paths[2] == 'deleteEvent':
                 event = paths[3]
             else:
@@ -327,8 +367,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 response = "Failed - no such event: %s" % event
 
         elif '/ui/' in self.path:
-            if RestrictAccess and self.client_ip() not in RestrictAccess:
-                return self.access_denied()
+#            if RestrictAccess and self.client_ip() not in RestrictAccess:
+#                return self.access_denied()
             path = "ui/" + settings.DefaultUI + '/' + self.path.split('/ui/',1)[1]
             socket = self.connection
             try:
@@ -364,8 +404,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(bytes(response,'utf-8'))
         else:
             self.wfile.write(bytes('''{ "ok": "%s" }''' % response,'utf-8'))
-        cprint (response+"\n","white")
-        print("")
+#        cprint (response+"\n","white")
+#        print("")
 
 
 def sendCommand(commandName,params):
@@ -444,11 +484,37 @@ def sendCommand(commandName,params):
             return commandName
         return False
 
+
+def getType(statusName,params):
+    deviceName = params["device"]
+    if deviceName in devices.DeviceByName:
+        device = devices.DeviceByName[deviceName]
+    else:
+        cprint ("Failed: No such device, %s" % deviceName, "yellow")
+        return False
+
+    sectionName = "RADIO " + statusName
+    if settingsFile.has_section(sectionName):
+        if settingsFile.has_option(sectionName,"commands"):
+            varlist = settingsFile.get(sectionName,"commands")
+            pattern = re.compile("\s*(commands|device|deviceDelay)\s*")
+            varlist = pattern.sub ('',varlist)
+            return ("list",varlist)
+        else:
+            varlist = settingsFile.options(sectionName)
+            varlist.remove("device")
+            varlist.remove("deviceDelay")
+            varlist.remove("sequence")
+            varlist = ' '.join(varlist)
+            return ("list",varlist)
+    return ("string",None)
+
+
 def learnCommand(commandName, params):
     deviceName = params["device"]
     try:
         if deviceName in devices.DeviceByName:
-            device = devices.DeviceByName[deviceName];
+            device = devices.DeviceByName[deviceName]
             sectionName = deviceName + ' Commands'
         else:
             cprint ("Failed: No such device, %s" % deviceName,"yellow")
@@ -500,7 +566,7 @@ def setStatus(commandName, status, params):
     oldvalue = getStatus(commandName,params)
     section = "TRIGGER " + commandName  #- Where trigger commands are stored
     if oldvalue == status:
-        default= "Value of %s/%s not changed: %s" % (deviceName,commandName, status)
+        default= "%s/%s not changed: %s" % (deviceName,commandName, status)
         if settingsFile.has_option(section, "nop"):
             rawcommand = settingsFile.get(section,"nop")
         else:
@@ -665,10 +731,11 @@ def readSettingsFile(settingsFile):
     if settingsFile.has_option('General', 'RestrictAccess'):
         RestrictAccess = settingsFile.get('General', 'RestrictAccess').strip()
 
+    global MaxThreads
     if settingsFile.has_option('General', 'MaxThreads'):
-        MaxThreads = settingsFile.get('General','MaxThreads')
+        MaxThreads = int(settingsFile.get('General','MaxThreads'))
     else:
-        MaxThreads = 8
+        MaxThreads = 16
     if settingsFile.has_option('General', 'LearnFrom'):
         LearnFrom = settingsFile.get('General', 'LearnFrom').strip();
 
