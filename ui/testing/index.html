@@ -26,7 +26,7 @@
     <link rel="shortcut icon" href="/ui/images/favicon.png">
 <script>
 (function() {
-      function getScript(url,success){
+    function getScript(url,success){
         var script=document.createElement('script');
         script.src=url;
         var head=document.getElementsByTagName('head')[0],
@@ -41,12 +41,28 @@
         };
         head.appendChild(script);
       }
-        getScript('/ui/jquery-3.3.1.min.js',function() {
-            getScript('/ui/custom.js', function() {
-                custom_init();
-            });
+    passwordloaded = false;
+    function check_custom_init() {
+        if (passwordloaded) {
+            custom_init();
+        } else {
+            setTimeout(check_custom_init,25);
+        }
+    }
+    getScript('/ui/js.cookie.js',function() {
+        if (Cookies.get("password") === undefined) {
+            location.href = "/ui/access.html";
+        }
+        else {
+            passwordloaded = true;
+        }
+    });
+    getScript('/ui/jquery-3.3.1.min.js',function() {
+        getScript('/ui/custom.js', function() {
+            check_custom_init();
         });
-    })();
+    });
+  })();
 </script>
 </head>
 

@@ -1,17 +1,35 @@
+$.postJSON = function(url, func)
+{
+    var sendInfo = {
+            password: Cookies.get("password")
+       };
+
+    $.ajax({
+            type: "POST",
+            url: url,
+            dataType: "json",
+            processData: false,
+            contentType: 'application/json',
+            success: func,
+            data: JSON.stringify(sendInfo)
+       });
+}
 function custom_init() {
     custom_set_subtitle();
     custom_get_dash();
     custom_get_devices();
 }
-
 function custom_set_subtitle() {
-    $.getJSON("/getHomeName", function(data) {
+    $.postJSON("/getHomeName", function(data) {
+        if (data.hasOwnProperty('error')) {
+            location.href = '/ui/access.html';
+        }
         $('#subtitle').html( data.ok );
     });
 }
 
 function custom_get_dash() {
-    $.getJSON("/getCustomDash", function(data) {
+    $.postJSON("/getCustomDash", function(data) {
         if (data.hasOwnProperty('ok')) {
         statusbar = '<div class="mdl-dash mdl-shadow--2dp">';
         statusbar += '    <div class="center"><b>' + $('#subtitle').html() + '</b></div>';
@@ -23,7 +41,7 @@ function custom_get_dash() {
     });
 }
 function custom_get_devices() {
-    $.getJSON("/listDevices", function(data) {
+    $.postJSON("/listDevices", function(data) {
         $('#custom-content').html('');
         if (data.hasOwnProperty('ok')) {
         Object.keys(data).forEach(function(key,index) {
@@ -34,16 +52,22 @@ function custom_get_devices() {
         })
         }
     })
-    .fail(function(hdr,textstatus,error) {
-        console.log(textstatus);
-        console.log(error);
-    });
-    setTimeout(custom_get_devices,15000);
 }
 
 function custom_build_device_card(dev,comment) {
+    if ( dev != comment ) {
+        comment = dev + ": " + comment
+    }
+    setTimeout (function() { custom_build_device_content(dev,comment); }, 500+Math.floor(Math.random() * 500));
+    startcard = '<div class="mdl-cell mdl-cell--4-col" id="'+dev+'-card"><div> </div>'
+    endcard = '</div>';
+    return startcard + endcard;
+}
+function custom_build_device_content(dev,comment) {
+    setTimeout (function() { custom_build_device_content(dev,comment); }, 5000+Math.floor(Math.random() * 5000));
+
     extraclass = ''
-    $.getJSON("/"+dev+"/listStatus", function(data) {
+    $.postJSON("/"+dev+"/listStatus", function(data) {
         statusinfo = '';
         count = 0;
         if (data.hasOwnProperty('ok')) {
@@ -73,22 +97,15 @@ function custom_build_device_card(dev,comment) {
         }
         }
     })
-    .fail(function(hdr,textstatus,error) {
-        console.log(textstatus);
-        console.log(error);
-    });
-    if ( dev != comment ) {
-        comment = dev + ": " + comment
-    }
-    startcard = '<div class="mdl-cell mdl-cell--4-col">'
     innercard = '<div class="mdl-card mdl-shadow--2dp">'
-        + '<div class="center"><b>'+comment+'</b></div>'
-        + '<table><tr><td><img id="'+dev+'img" class="icon'
+        + '<div class="card-title"><b>'+comment+'</b></div>'
+        + '<table class="card-interior">'
+        + '<tr class="card-interior-row">'
+        + '<td><img id="'+dev+'img" class="icon'
         + extraclass + '" src="/getIcon/'+dev+'.svg" /></td>'
         + '<td><table class="small data" id="'+ dev
         + '"> </table></td></tr><tr><td colspan="3">'
         + '</td></tr></table></div>'
-    endcard = '</div>';
-    return startcard + innercard + endcard;
+    $('#'+dev+'-card').html(innercard);
 }
 

@@ -1,0 +1,44 @@
+<html>
+<head>
+<title>RestHome</title>
+<script src='/ui/js.cookie.js'></script>
+<script src='/ui/jquery-3.3.1.min.js'></script>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="A front-end template that helps you build fast, modern mobile web apps.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="icon" sizes="192x192" href="/ui/images/desktop.png">
+
+    <!-- Add to homescreen for Safari on iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="RestHome">
+    <link rel="apple-touch-icon-precomposed" href="/ui/images/desktop.png">
+
+    <!-- Tile icon for Win8 (144x144 + tile color) -->
+    <meta name="msapplication-TileImage" content="/ui/images/ms-touch-icon-144x144-precomposed.png">
+    <meta name="msapplication-TileColor" content="#3372DF">
+
+    <link rel="shortcut icon" href="/ui/images/favicon.png">
+</head>
+<script>
+function submit_password() {
+    Cookies.set('password',$('#pass')[0].value);
+    location.href='/ui/index.html';
+    return false;
+}
+$( document ).ready(function() {
+    $('#prompt').submit(submit_password);
+});
+</script>
+<body>
+<form id="prompt" style="width: 100%; height: 100%; background: #444; color: #fff">
+<h1>Password Required</h1>
+<label for='pass' >Password:</label>
+<input type='password' id='pass' name='password' minlength=8 required />
+<input type='submit' value="submit" onclick="return submit_password();"/>
+</body>
+</html>
+
