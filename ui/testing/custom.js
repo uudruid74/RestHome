@@ -149,8 +149,9 @@ function custom_build_device_content(dev,comment,loop) {
             });
             if (changed) {
                 $('#' + dev).html(statusinfo);
-                $("#"+dev+"img").on('click',function() {
+                $("#"+dev+"img").on('click',function(event) {
                     clickimage(dev,clickkey,clickstatus,comment);
+                    event.stopPropagation();
                 });
             }
             if (count == 1) {
