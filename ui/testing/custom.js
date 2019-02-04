@@ -19,7 +19,6 @@ $.postJSON = function(url, func)
 }
 function custom_init() {
     custom_set_subtitle();
-    custom_get_dash();
     custom_get_devices();
 }
 function custom_set_subtitle() {
@@ -43,22 +42,47 @@ function custom_get_dash() {
         }
     });
 }
+function populate_dialog(dev,devcache) {
+    $('#dial-devname').html(dev);
+    var formdata = '<form action="#">\n';
+    // need to use the new getType here to allow for drop-down lists
+    Object.keys(devcache).forEach(function(key,index) {
+        id = dev+'-'+key;
+        formdata += '<div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">'+
+            '<input class="mdl-textfield__input" type="text" id="'+id+'" value="'+devcache[key]+'">'+
+            '<label class="mdl-textfield__label" for="'+id+'">'+key+'</label>'+
+            '</div>\n'
+    });
+    formdata += "</form>";
+    $('#dial-statuslist').html(formdata);
+    componentHandler.upgradeElements(document.getElementById('dial-statuslist'));
+    // add a handler such that we update the server on focus change using setStatus
+}
 
 function custom_get_devices() {
     $.postJSON("/listDevices", function(data) {
-        $('#custom-content').html('');
+        $('#custom-content').html('<div id="customdash" class="mdl-cell mdl-cell--12-col mdl-cell--8-col-tablet mdl-cell--4-col-phone"> </div>');
+        custom_get_dash();
         if (data.hasOwnProperty('ok')) {
-            DevList = {}
+            DevList = {};
+            ImgList = [];
             Object.keys(data).forEach(function(key,index) {
-                DevList[key] = data[key];
-                if (key != 'ok' && key != 'default') {
-                    ret = custom_build_device_card(key,data[key]);
-                    $('#custom-content').append(ret);
-                    custom_build_device_content(key,data[key],true);
+                if (key != "ok" && key != 'default') {
+                    DevList[key] = data[key];
+                    ImgList.push("/getIcon/"+key+".svg");
                 }
-            })
+            });
+            preloadImages(ImgList,function() {
+                Object.keys(data).forEach(function(key,index) {
+                    if (key != 'ok' && key != 'default') {
+                        ret = custom_build_device_card(key,data[key]);
+                        $('#custom-content').append(ret);
+                        custom_build_device_content(key,data[key],true);
+                    }
+                });
+            });
         }
-    })
+    });
 }
 
 function custom_build_device_card(dev,comment) {
@@ -66,7 +90,7 @@ function custom_build_device_card(dev,comment) {
     if ( dev != comment ) {
         comment = dev + ": " + comment
     }
-    var startcard = '<div class="mdl-cell mdl-cell--4-col" id="'+dev+'-card"><div> </div>'
+    var startcard = '<div class="mdl-cell mdl-card mdl-shadow--2dp mdl-cell--4-col" id="'+dev+'-card"><div> </div>'
     var endcard = '</div>';
     return startcard + endcard;
 }
@@ -102,28 +126,68 @@ function clickimage(dev,clickkey,oldstatus,comment) {
 
 }
 
+function device_reset(dev) {
+    $('#'+dev+'-card').removeClass("device-on device-off light-on heat-on");
+}
+function device_on(dev,comment) {
+    device_reset(dev);
+    if (comment == null) {
+        $('#'+dev+'-card').addClass('device-on');
+        return;
+    }
+    teststr = comment.toLowerCase();
+    $('#'+dev+'-img').removeClass("poweroff").addClass("poweron");
+    if (teststr.indexOf('light') != -1) {
+        $('#'+dev+'-card').addClass('light-on');
+    } else if (teststr.indexOf('heat') != -1) {
+        $('#'+dev+'-card').addClass('heat-on');
+    } else $('#'+dev+'-card').addClass('device-on');
+}
+function device_off(dev) {
+    device_reset(dev);
+    $('#'+dev+'-img').removeClass("poweron").addClass("poweroff");
+    $('#'+dev+'-card').addClass('device-off');
+}
+function preloadImages(urls, allImagesLoadedCallback){
+    var loadedCounter = 0;
+    var toBeLoadedNumber = urls.length;
+    urls.forEach(function(url){
+        preloadImage(url, function(){
+            loadedCounter++;
+            if(loadedCounter == toBeLoadedNumber) {
+                setTimeout(allImagesLoadedCallback,500);
+            }
+        });
+    });
+    function preloadImage(url, anImageLoadedCallback){
+        var img = new Image();
+        img.onload = anImageLoadedCallback;
+        img.src = url;
+    }
+}
 function custom_build_device_content(dev,comment,loop) {
     var clickkey = '';
     var clickstatus = '';
     var statusinfo = '';
     var changed = false;
+    var innercard;
 
     if (!(dev in DevCache)) {
-        innercard = '<div class="mdl-card mdl-shadow--2dp">'
-            + '<div class="card-title"><b>'+comment+'</b></div>'
+        innercard = '<div class="card-title"><b>'+comment+'</b></div>'
             + '<table class="card-interior">'
             + '<tr class="card-interior-row">'
-            + '<td><img id="'+dev+'img" class="icon" '
+            + '<td><img id="'+dev+'-img" class="icon" '
             + 'src="/getIcon/'+dev+'.svg" /></td>'
             + '<td><table class="small data" id="'+ dev
             + '"> </table></td></tr><tr><td colspan="3">'
-            + '</td></tr></table></div>';
-        $('#'+dev+'-card').html(innercard);
+            + '</td></tr></table>';
         changed = true;
         DevCache[dev] = {}
     }
     $.postJSON("/"+dev+"/listStatus", function(data) {
         var count = 0;
+        if (changed)
+            $('#'+dev+'-card').html(innercard);
         if (data.hasOwnProperty('ok')) {
             Object.keys(data).forEach(function(key,index) {
                 if (key != 'ok' && key != 'default') {
@@ -136,40 +200,44 @@ function custom_build_device_content(dev,comment,loop) {
                     lastkey = key;
                     if (key == 'power' || key == 'enabled' || key.toLowerCase() == dev.toLowerCase()) {
                         if (data[key] == '1') {
-                            $('#'+dev+'img').removeClass('poweroff').addClass('poweron');
+                            device_on(dev,comment)
                         }
                         else if (data[key] == '0') {
-                            $('#'+dev+'img').removeClass('poweron').addClass('poweroff');
+                            device_off(dev)
                         }
                         clickkey = key;
                         clickstatus = data[key];
                     }
-                    statusinfo += '<tr><td><b>' + key + '</b></td><td>' + data[key] + "</td></tr>\n";
+                    if (count < 7) {
+                        statusinfo += '<tr><td><b>' + key + '</b></td><td>' + data[key] + "</td></tr>\n";
+                    } else if (count == 7) {
+                        statusinfo += "<tr><td><b>&hellip;</b><td><td><b>&hellip;</b></td></tr>\n"
+                    }
                 }
             });
             if (changed) {
                 $('#' + dev).html(statusinfo);
-                $("#"+dev+"img").on('click',function(event) {
+                $("#"+dev+"-img").unbind().on('click',function(event) {
                     clickimage(dev,clickkey,clickstatus,comment);
-                    event.stopPropagation();
                 });
-            }
-            if (count == 1) {
-                clickkey = lastkey;
-                clickstatus = lastvalue
-                if (lastvalue == '0') {
-                    $('#'+dev+'img').removeClass('poweron').addClass('poweroff');
-                }
-                else if (lastvalue == '1') {
-                    $('#'+dev+'img').removeClass('poweroff').addClass('poweron');
-                }
+                $("#"+dev).unbind().on('click',function(event) {
+                    populate_dialog(dev,DevCache[dev])
+                    var dialog = document.querySelector('dialog');
+                    if (! dialog.showModal) {
+                        dialogPolyfill.registerDialog(dialog);
+                    }
+                    dialog.showModal();
+                    dialog.querySelector('.close').addEventListener('click', function() {
+                        dialog.close();
+                    });
+                });
             }
         }
         if (loop) {
             setTimeout (function() {
                 custom_build_device_content(dev,comment,true);
-            }, 8000+Math.floor(Math.random() * 4000));
+            }, 5000+Math.floor(Math.random() * 2000));
         }
-    })
+    });
 }
 

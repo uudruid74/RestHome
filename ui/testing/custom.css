@@ -1,5 +1,47 @@
+body {
+    background: black;
+    color: lightgrey;
+}
+
 a.mdl-navigation__link {
-    color: white !important;
+    color: lightgrey !important;
+}
+table {
+    color: inherit;
+}
+dialog {
+    position: fixed;
+    top: 50%;
+    transform: translate(0, -50%);
+    background: #333;
+    color: lightgrey !important;
+    border-color: #000;
+    border-radius: 8px;
+    box-shadow: 1px 2px 15px black;
+    max-width: calc(100% - 6rem);
+    max-height: calc(100% - 8rem);
+    overflow-y: scroll;
+    scrollbar-width: 4px;
+}
+dialog::-webkit-scrollbar { /* WebKit */
+    width: 4px;
+}
+.mdl-dialog__content {
+    color: rgba(255,255,255,.74);
+}
+.mdl-button {
+    color: white;
+}
+dialog::backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.9);
+}
+.mdl-textfield--floating-label.is-focused .mdl-textfield__label, .mdl-textfield--floating-label.is-dirty .mdl-textfield__label, .mdl-textfield--floating-label.has-placeholder .mdl-textfield__label {
+    color: rgb(80,200,255);
 }
 .icon {
     width: 64px;
@@ -12,10 +54,10 @@ h2 { display:inline; }
     border-spacing: 16px 0;
 }
 .poweron {
-    filter: drop-shadow(0 0 0.75rem crimson);
+    filter: drop-shadow(0 0 0.75rem yellow);
 }
 .poweroff {
-    filter: grayscale(80%) drop-shadow(0 0 0.75rem rgba(0,0,0,0.8))
+    filter: grayscale(80%) drop-shadow(0 0 0.75rem rgba(0,0,0,0.9))
 }
 .card-title {
     text-align: center;
@@ -24,21 +66,38 @@ h2 { display:inline; }
 }
 .card-interior {
     min-height: 150px;
-    margin-top: 8px;
+    margin-top: 16px;
 }
 .card-interior-row {
     height: 100%;
 }
 .mdl-dash,.mdl-card {
-    background: lightgrey;
+    background: #222;
     font-family: Sans;
+    border-radius: 0.4em;
+}
+.heat-on {
+    background: #422;
+}
+.device-on {
+    background: #244;
+}
+.light-on {
+    background: #442;
+}
+.device-off {
+    background: #444;
+    color: darkgrey;
+}
+.mdl-shadow--2dp {
+    box-shadow: 0 2px 2px 0 rgba(100,100,100,.14), 0 3px 1px -2px rgba(100,100,100,.2), 0 1px 5px 0 rgba(100,100,100,.12);
 }
 .mdl-navigation {
     top: 5rem;
     position: absolute;
 }
 .mdl-layout__drawer {
-    background-color: rgb(96,125,139);
+    background-color: #022;
     color: yellow;
 }
 .mdl-layout__drawer .mdl-navigation .mdl-navigation__link:hover {
@@ -47,6 +106,9 @@ h2 { display:inline; }
 }
 .mdl-layout__drawer>.mdl-layout__title, .mdl-layout__drawer>.mdl-layout-title {
     text-shadow: 0.75px 0.75px 4px rgba(0,0,0,0.6), -0.75px -0.75px 4px rgba(0,0,0,0.6);
+}
+.mdl-layout__drawer {
+    border-right: 1px solid #011;
 }
 .center {
     text-align: center;

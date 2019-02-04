@@ -49,6 +49,7 @@
             setTimeout(check_custom_init,25);
         }
     }
+    getScript('/ui/dialog-polyfill.js',function() {});
     getScript('/ui/js.cookie.js',function() {
         if (Cookies.get("password") === undefined) {
             location.href = "/ui/access.html";
@@ -67,6 +68,16 @@
 </head>
 
 <body>
+
+<dialog class-"mdl-dialog">
+<h4 class="mdl-dialog__title" id="dial-devname">Device Name</h4>
+<div class="mdl-dialog__content" id="dial-statuslist">
+</div>
+<div class="mdl-dialog__actions">
+<button type="button" class="mdl-button close">Done</button>
+</div>
+</dialog>
+
 <div class="mdl-layout mdl-js-layout mdl-layout--fixed-drawer">
   <div class="mdl-layout__drawer">
     <span class="mdl-layout__title">RestHome</span>
@@ -79,8 +90,8 @@
   </div>
   <main class="mdl-layout__content">
 
-    <div id="customdash" class="mdl-cell mdl-cell--12-col mdl-cell--8-col-tablet mdl-cell--4-col-phone"> </div>
-    <div id="custom-content" class="mdl-grid"> </div>
+    <div id="custom-content" class="mdl-grid">
+    </div>
 
 <div class="center small">Icons made by <a href="https://smashicons.com/" title="Smashicons">Smashicons</a> and others from <a href="https://www.flaticon.com/" title="Flaticon">www.flaticon.com</a> is licensed by <a href="http://creativecommons.org/licenses/by/3.0/"          title="Creative Commons BY 3.0" target="_blank">CC 3.0 BY</a></div>
   </main>
