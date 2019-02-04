@@ -613,7 +613,7 @@ def setStatus(commandName, status, params):
         params[commandName+' side-effect'] = True
         macros.eventList.add("%s-LOGIC" % commandName,0,commandName,params)
         cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
-    return oldvalue
+    return status
 
 #- Use getStatus to read variables, either from the settings file or device
 def getStatus(commandName, params):
