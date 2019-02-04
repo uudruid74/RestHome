@@ -245,8 +245,13 @@ def checkMacros(OcommandFromSettings,query):
             with devices.Dev[deviceName]['Lock']:
                 exec_macro(commandFromSettings,query)
         else:
-            #print ("Making Event for %s" % commandFromSettings)
-            eventList.add(query['command'],query["deviceDelay"],OcommandFromSettings,query)
+            print ("Making Event for %s" % commandFromSettings)
+            eventName = query['command'];
+            if eventName.endswith('on'):
+                eventName = eventName[:-2]
+            elif eventName.endswith('off'):
+                eventName = eventName[:-3]
+            eventList.add(eventName,query["deviceDelay"],OcommandFromSettings,query)
         return True
     else:
         return False #- not a macro
@@ -271,6 +276,7 @@ def exec_macro(commandFromSettings,query):
             continue
 
         if "(" in command:
+            timerCount = 0
             for command in parenSplit(command):
                 paramString = command[command.find("(")+1:command.rfind(")")]
                 command = command[:command.find("(")]
@@ -301,7 +307,13 @@ def exec_macro(commandFromSettings,query):
                 elif command.startswith('timer'):
                     minutes = "0" + command[5:]
                     seconds = float(minutes) * 60 + query['deviceDelay']
-                    eventList.add("timer-"+paramString,seconds,"."+paramString,newquery)
+                    eventName = query['command']
+                    if eventName.endswith("on"):
+                        eventName = eventName[:-2]
+                    elif eventName.endswith("off"):
+                        eventName = eventName[:-3]
+                    eventList.add(eventName+"-"+str(timerCount),seconds,"."+paramString,newquery)
+                    timerCount = timerCount + 1
                 else:
                     #cprint("command = %s, param = %s" % (command,paramString), "magenta")
                     if ',' in paramString and '=' in paramString:
@@ -319,7 +331,7 @@ def exec_macro(commandFromSettings,query):
                     if command == "logic":
                         execute_logicnode_raw(newquery)
                     elif command == "event":
-                        execute_event_raw(newquery['device']+"-"+str(time.time()),newquery)
+                        execute_event_raw(newquery['device']+"-"+str(int(time.time()))[5:],newquery)
                     else:
                         if checkConditionals(command,newquery) is False:
                            sendCommand(command,newquery)
