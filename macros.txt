@@ -16,8 +16,8 @@ Virtual commands are defined like normal, in either the global or per-device
 "Commands" section.  List the virtual command name as the lvalue and as the
 right value you may use an instruction such as:
     PRINT   Prints the string, which may contain URL parameters
-    SET     And a single variable to set to 1, reports old value
-    CLEAR   And a single variable to set to 0, reports old value
+    SET     And a single variable to set to 1, reports new value
+    CLEAR   And a single variable to set to 0, reports new value
     INC     And a single variable to increment, reports new value
     DEC     And a single variable to increment, reports new value
     TOGGLE  And a single variable to set to toggle, reports new value
