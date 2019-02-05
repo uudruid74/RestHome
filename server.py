@@ -102,6 +102,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Encoding', encoding)
         self.send_header('Content-Type', filetype)
         self.send_header('Access-Control-Allow-Origin','*')
+        #- Cache icons and UI library code for min 90 days, images for 30 days
+        #- Normal UI html and css files are cached for at least 7 days
+        if 'getIcon' in path or '/ui/lib/' in path:
+            self.send_header('Cache-Control', 'max-age=7776000'); #- 90 days
+        elif '/ui/images/' in path:
+            self.send_header('Cache-Control', 'max-age=2592000'); #- 30 days
+        elif '/ui/' in path:
+            self.send_header('Cache-Control', 'max-age=604800');  #-  7 days
         self.end_headers()
 
     def client_ip(self):
@@ -369,7 +377,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif '/ui/' in self.path:
 #            if RestrictAccess and self.client_ip() not in RestrictAccess:
 #                return self.access_denied()
-            path = "ui/" + settings.DefaultUI + '/' + self.path.split('/ui/',1)[1]
+            if '/ui/lib/' in self.path:
+                path = "ui/lib/" + self.path.split('ui/lib/',1)[1]
+            else:
+                path = "ui/" + settings.DefaultUI + '/' + self.path.split('/ui/',1)[1]
             socket = self.connection
             try:
                 with open(path,'rb') as f:
