@@ -2,9 +2,9 @@
 <head>
 <title>RestHome</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" media="none" onload="if(media!='all')media='all'">
-<link rel="stylesheet" href="/ui/material.blue_grey-indigo.min.css">
+<link rel="stylesheet" href="/ui/lib/material.blue_grey-indigo.min.css">
 <link rel="stylesheet" href="/ui/custom.css">
-<script defer src="/ui/material.min.js"></script>
+<script defer src="/ui/lib/material.min.js"></script>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="description" content="A front-end template that helps you build fast, modern mobile web apps.">
@@ -49,8 +49,8 @@
             setTimeout(check_custom_init,25);
         }
     }
-    getScript('/ui/dialog-polyfill.js',function() {});
-    getScript('/ui/js.cookie.js',function() {
+    getScript('/ui/lib/dialog-polyfill.js',function() {});
+    getScript('/ui/lib/js.cookie.js',function() {
         if (Cookies.get("password") === undefined) {
             location.href = "/ui/access.html";
         }
@@ -58,7 +58,7 @@
             passwordloaded = true;
         }
     });
-    getScript('/ui/jquery-3.3.1.min.js',function() {
+    getScript('/ui/lib/jquery-3.3.1.min.js',function() {
         getScript('/ui/custom.js', function() {
             check_custom_init();
         });
