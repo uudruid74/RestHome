@@ -90,7 +90,8 @@ class EventList(object):
             if node == None:
                 return None
             while node.name.startswith(name):
-                self.begin = node.nextNode
+                node = node.nextNode
+                self.begin = node
             while node.nextNode != None:
                 if node.nextNode.name.startswith(name):
                     found = node.nextNode

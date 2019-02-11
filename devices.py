@@ -52,7 +52,10 @@ def addShutdown(func):
     FuncShutdown.append(func)
 
 def addRoom(device,name):
-    DeviceByRoom[device] = name
+    if name in DeviceByRoom:
+        DeviceByRoom[name] = DeviceByRoom[name] + " " + device
+    else:
+        DeviceByRoom[name] = device
 
 def setHome(device):
     DeviceByRoom['House'] = device
@@ -71,10 +74,12 @@ def getDash():
 
 def discover (settings,timeout,listen,broadcast):
     for func in FuncDiscover:
+        #- TODO: Thread this
         func(settings,timeout,listen,broadcast)
 
 def readSettings (settings,devname):
     for func in FuncReadSettings:
+        #- TODO: Refactor and thread
         retvalue = func(settings,devname)
         if retvalue is not False:
             return retvalue
@@ -94,11 +99,12 @@ def dumpDevices():
 
 def dumpRooms():
     retval = '''{\n\t"ok": "%s"''' % DeviceByRoom['House']
+    Room = {}
     with SettingsLock:
-        for devicename,roomname in DeviceByRoom.items():
-            if devicename == 'House':
+        for roomname,devicelist in DeviceByRoom.items():
+            if roomname == 'House':
                 continue
-            retval += ''',\n\t"%s": "%s"''' % (devicename,roomname)
+            retval += ''',\n\t"%s": "%s"''' % (roomname,devicelist)
     retval += '''\n}'''
     return retval
 

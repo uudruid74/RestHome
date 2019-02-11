@@ -5,6 +5,8 @@ body {
 
 a.mdl-navigation__link {
     color: lightgrey !important;
+    font-family: sans;
+    font-size: 120%;
 }
 table {
     color: inherit;
@@ -31,6 +33,7 @@ dialog::-webkit-scrollbar { /* WebKit */
 }
 .mdl-dialog__title {
     font-size: 1.8rem;
+    font-family: sans-serif;
 }
 .mdl-button {
     color: white;
@@ -120,7 +123,8 @@ h2 { display:inline; }
     font-size: 88%;
 }
 .mdl-layout__subtitle {
+    margin: 2px 0 -8px;
     font-size: 100%;
-    top: -2.5rem;
-    color: darkgray;
+    top: -3rem;
+    color: #88888888;
 }

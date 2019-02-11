@@ -455,13 +455,17 @@ def sendCommand(commandName,params):
             if commandName.endswith("on"):
                 newCommandName = commandName[:-2]
                 params[commandName + ' side-effect'] = True
-                if setStatus(newCommandName, '1', params) == "1":
+                if getStatus(newCommandName,params) == '1':
                     isRepeat = True
+                else:
+                    setStatus(newCommandName, '1', params)
             elif commandName.endswith("off"):
                 newCommandName = commandName[:-3]
                 params[commandName + ' side-effect'] = True
-                if setStatus(newCommandName, '0', params) == "0":
+                if getStatus(newCommandName, params) == '0':
                     isRepeat = True
+                else:
+                    setStatus(newCommandName, '0', params)
 
         if settingsFile.has_option(serviceName, commandName):
             command = settingsFile.get(serviceName, commandName)
@@ -479,7 +483,6 @@ def sendCommand(commandName,params):
             #- Otherwise, it's not a toggle and send it through
             if settingsFile.has_option('Commands', newCommandName):
                 return "fail: %s was ignored" % commandName
-        #print ("Commandname: %s Command: %s" % (commandName,command))
         if command is False:
             result = macros.checkMacros(commandName,params)
         else:

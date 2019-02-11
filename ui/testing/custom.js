@@ -1,5 +1,6 @@
 DevCache = {};
 DevList = {};
+RestrictDevs = {};
 
 $.postJSON = function(url, func)
 {
@@ -17,9 +18,34 @@ $.postJSON = function(url, func)
             data: JSON.stringify(sendInfo)
        });
 }
+function custom_refresh() {
+    console.log("Custom Refresh");
+    $(".device").each(function(index,elem) {
+        console.log(elem);
+        custom_build_device_content(elem.id.substring(0,elem.id.lastIndexOf('-')),$(elem).find('.card-title').text());
+    });
+    setTimeout(custom_refresh, 3000);
+}
 function custom_init() {
+    custom_roomlist();
     custom_set_subtitle();
     custom_get_devices();
+    $( window ).on( 'hashchange', custom_get_devices );
+    setTimeout(custom_refresh, 5000);
+}
+function custom_roomlist() {
+    navbar = $('#navbar');
+    navbar.html('<a class="mdl-navigation__link" href="#">Home</a>');
+    $.postJSON("/listRooms",function(data) {
+        if (data.hasOwnProperty('ok')) {
+            Object.keys(data).forEach(function(key,index) {
+                if ((key != "Home") && (key != "ok")) {
+                    RestrictDevs['#'+key] = data[key].split(' ');
+                    navbar.append('<a class="mdl-navigation__link" href="#'+key+'">'+key+'</a>');
+                }
+            });
+        }
+    });
 }
 function custom_set_subtitle() {
     $.postJSON("/getHomeName", function(data) {
@@ -38,12 +64,12 @@ function custom_get_dash() {
         statusbar += '    <div class="center">' + data.ok + '</div>';
         statusbar += '</div>';
         $('#customdash').html(statusbar);
-        setTimeout(custom_get_dash,10000);
         }
     });
 }
-function populate_dialog(dev,devcache) {
+function populate_dialog(dev,devcache,comment) {
     $('#dial-devname').html(dev);
+    $('#dial-comment').html(comment);
     var formdata = '<form action="#">\n';
     // need to use the new getType here to allow for drop-down lists
     Object.keys(devcache).forEach(function(key,index) {
@@ -66,6 +92,7 @@ function custom_get_devices() {
         if (data.hasOwnProperty('ok')) {
             DevList = {};
             ImgList = [];
+            DevCache = {};
             Object.keys(data).forEach(function(key,index) {
                 if (key != "ok" && key != 'default') {
                     DevList[key] = data[key];
@@ -75,9 +102,14 @@ function custom_get_devices() {
             preloadImages(ImgList,function() {
                 Object.keys(data).forEach(function(key,index) {
                     if (key != 'ok' && key != 'default') {
-                        ret = custom_build_device_card(key,data[key]);
+                        if (window.location.hash) {
+                            if (RestrictDevs[window.location.hash].indexOf(key) == -1) {
+                                return;
+                            }
+                        }
+                        ret = custom_build_device_card(key);
                         $('#custom-content').append(ret);
-                        custom_build_device_content(key,data[key],true);
+                        custom_build_device_content(key,data[key]);
                     }
                 });
             });
@@ -85,12 +117,8 @@ function custom_get_devices() {
     });
 }
 
-function custom_build_device_card(dev,comment) {
-    var comment;
-    if ( dev != comment ) {
-        comment = dev + ": " + comment
-    }
-    var startcard = '<div class="mdl-cell mdl-card mdl-shadow--2dp mdl-cell--4-col" id="'+dev+'-card"><div> </div>'
+function custom_build_device_card(dev) {
+    var startcard = '<div class="device mdl-cell mdl-card mdl-shadow--2dp mdl-cell--4-col" id="'+dev+'-card"><div> </div>'
     var endcard = '</div>';
     return startcard + endcard;
 }
@@ -121,9 +149,8 @@ function clickimage(dev,clickkey,oldstatus,comment) {
         }
     }
     $.postJSON(url, function() {
-            custom_build_device_content(dev,comment,false);
+            custom_build_device_content(dev,comment);
         });
-
 }
 
 function device_reset(dev) {
@@ -165,7 +192,7 @@ function preloadImages(urls, allImagesLoadedCallback){
         img.src = url;
     }
 }
-function custom_build_device_content(dev,comment,loop) {
+function custom_build_device_content(dev,comment) {
     var clickkey = '';
     var clickstatus = '';
     var statusinfo = '';
@@ -173,7 +200,12 @@ function custom_build_device_content(dev,comment,loop) {
     var innercard;
 
     if (!(dev in DevCache)) {
-        innercard = '<div class="card-title"><b>'+comment+'</b></div>'
+        if ( dev !== comment) {
+            title = dev + ": " + comment;
+        } else {
+            title = dev;
+        }
+        innercard = '<div class="card-title"><b>'+title+'</b></div>'
             + '<table class="card-interior">'
             + '<tr class="card-interior-row">'
             + '<td><img id="'+dev+'-img" class="icon" '
@@ -221,7 +253,7 @@ function custom_build_device_content(dev,comment,loop) {
                     clickimage(dev,clickkey,clickstatus,comment);
                 });
                 $("#"+dev).unbind().on('click',function(event) {
-                    populate_dialog(dev,DevCache[dev])
+                    populate_dialog(dev,DevCache[dev],comment)
                     var dialog = document.querySelector('dialog');
                     if (! dialog.showModal) {
                         dialogPolyfill.registerDialog(dialog);
@@ -232,11 +264,6 @@ function custom_build_device_content(dev,comment,loop) {
                     });
                 });
             }
-        }
-        if (loop) {
-            setTimeout (function() {
-                custom_build_device_content(dev,comment,true);
-            }, 5000+Math.floor(Math.random() * 2000));
         }
     });
 }
