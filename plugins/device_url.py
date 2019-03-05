@@ -75,7 +75,17 @@ def readSettings(settingsFile,devname):
     Dev['getStatus'] = None
     Dev['setStatus'] = None
     Dev['getSensor'] = None
+    Dev['virtualize'] = virtualize
     return device
+
+def virtualize(real):
+    if 'Set' in real:
+        del real['Set']
+    if 'Find' in real:
+        del real['Find']
+    if 'Method' in real:
+        del real['Method']
+    return real
 
 #- Note that "command" is the decoded command.
 #- The command name is found in params['command']

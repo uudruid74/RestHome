@@ -95,7 +95,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         self.send_response(200)
         filetype = 'application/json'
-        (guesstype,encoding) = mimetypes.guess_type(path,False)
+        if path.find('?') != -1:
+            shortpath = path[:path.find('?')]
+        else:
+            shortpath = path
+        (guesstype,encoding) = mimetypes.guess_type(shortpath,False)
         if guesstype is not None:
             filetype = guesstype
         if encoding is not None:
@@ -251,7 +255,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if varlist is None:
                     response = '''{ "%s": "%s" }''' % (varName,status)
                 else:
-                    response = '''{\n\t"%s": "%s",\n\t"%s": "%s"\n}''' % (varName,status,status,varlist)
+                    response = '''{\n\t"%s": "%s",\n\t"device": "%s",\n\t"%s": "%s"\n}''' % (varName,status,deviceName,status,varlist)
             else:
                 response = "Failed: Unknown command - %s" % varName
 
@@ -375,12 +379,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 response = "Failed - no such event: %s" % event
 
         elif '/ui/' in self.path:
+            if self.path.find('?') != -1:
+                shortpath = self.path[:self.path.find('?')]
+            else:
+                shortpath = self.path
+            
 #            if RestrictAccess and self.client_ip() not in RestrictAccess:
 #                return self.access_denied()
-            if '/ui/lib/' in self.path:
-                path = "ui/lib/" + self.path.split('ui/lib/',1)[1]
+            if '/ui/lib/' in shortpath:
+                path = "ui/lib/" + shortpath.split('ui/lib/',1)[1]
             else:
-                path = "ui/" + settings.DefaultUI + '/' + self.path.split('/ui/',1)[1]
+                path = "ui/" + settings.DefaultUI + '/' + shortpath.split('/ui/',1)[1]
             socket = self.connection
             try:
                 with open(path,'rb') as f:
@@ -515,10 +524,13 @@ def getType(statusName,params):
             varlist = pattern.sub ('',varlist)
             return ("list",varlist)
         else:
-            varlist = settingsFile.options(sectionName)
-            varlist.remove("device")
-            varlist.remove("deviceDelay")
-            varlist.remove("sequence")
+            varlist = settingsFile.options(sectionName);
+            if "device" in varlist:
+                varlist.remove("device")
+            if "deviceDelay" in varlist:
+                varlist.remove("deviceDelay")
+            if "sequence" in varlist:
+                varlist.remove("sequence")
             varlist = ' '.join(varlist)
             return ("list",varlist)
     return ("string",None)
@@ -816,6 +828,9 @@ def SigUsr1(signum, frame):
 
 
 def SigInt(signum, frame):
+    if InterruptRequested.is_set():
+        print ("\n\nAborting!\n")
+        exit()
     cprint ("\nShuting down server ...","cyan")
     ShutdownRequested.set()
     InterruptRequested.set()

@@ -1,6 +1,7 @@
 import wol
 import string
 import time
+import re
 from platform import system as system_name
 from math import ceil as ceiling
 import subprocess
@@ -146,20 +147,28 @@ def expandVariables(commandString,query):
     secondPass = string.Template(firstPass).substitute(newquery)
     return secondPass
 
+#- parenSplit divides up a line into separate commands, keeping parenthesis 
 def parenSplit(parenstring):
     found = []
-    first = lcount = ccount = rcount = 0
+    first = ccount = nesting = 0
     for c in parenstring:
         ccount+=1
         if c == '(':
-            lcount+=1
+            nesting += 1;
         if c == ')':
-            if rcount > lcount:
+            nesting -= 1;
+            if nesting < 0:
                 cprint("Malformed command - parenthesis don't match at %s: %s" % (ccount,parenstring))
-            elif rcount == lcount:
+            elif nesting == 0:
                 #- found substring
-                found.push(parenstring[first:ccount])
-                first = ccount+1
+                if ccount+1 < len(parenstring):
+                    if parenstring[ccount+1:].find(' ') != -1:
+                        ccount += parenstring[ccount+1:].find(' ')
+                        found.append(parenstring[first:ccount])
+                        first = ccount+1
+                    else:
+                        found.append(parenstring[first:])
+                        return found
     if first < len(parenstring):
         found.append(parenstring[first:])
     return found
@@ -175,15 +184,32 @@ def relayTo(device,query):
     sendCommand(query['command'],newquery)
     return
 
-def incrementVar(variable):
-    variable += 1
-    setStatus(commandFromSettings[4:],str(variable),query)
-    return
+def mathOp(dest,op,val1,val2,query):
+    try:
+        val1 = int(val1.strip())
+    except:
+        val1 = 0
+    try:
+        val2 = int(val2.strip())
+    except:
+        val2 = 0
+    if op == "+":
+        amount = val1 + val2
+    elif op == "-":
+        amount = val1 - val2
+    elif op == "/":
+        amount = val1 / val2
+    elif op == "*":
+        amount = val1 * val2
+    #print ("New amount is %s from %s %s %s" % (amount,val1,op,val2))
+    result = setStatus(dest,str(amount),query)
+    return result
 
-def decrementVar(variable):
-    variable -= 1
-    setStatus(commandFromSettings[4:],str(variable),query)
-    return
+def incrementVar(variable,amount,query):
+    return mathOp(variable,"+",getStatus(variable,query),amount,query)
+
+def decrementVar(variable,amount,query):
+    return mathOp(variable,"-",getStatus(variable,query),amount,query)
 
 def cancelEvent(variable):
     eventList.delete(variable)
@@ -214,16 +240,16 @@ def checkMacros(OcommandFromSettings,query):
         setStatus(commandFromSettings[4:],"1",query)
         return True
     elif commandFromSettings.startswith("INC "):
-        variable = int(getStatus(commandFromSettings[4:],query))
-        incrementVar(variable)
+        params = commandFromSettings[4:].split()
+        incrementVar(params[0],params[1],query)
         return True
     elif commandFromSettings.startswith("CANCEL "):
         variable = int(getStatus(commandFromSettings[7:],query))
         cancelEvent(variable)
         return True
     elif commandFromSettings.startswith("DEC "):
-        variable = int(getStatus(commandFromSettings[4:],query))
-        decrementVar(variable)
+        params = commandFromSettings[4:].split()
+        decrementVar(params[0],params[1],query)
         return True
     elif commandFromSettings.startswith("CLEAR "):
         setStatus(commandFromSettings[6:],"0",query)
@@ -278,11 +304,15 @@ def exec_macro(commandFromSettings,query):
 
         if "(" in command:
             timerCount = 0
+            repeat = 1
             for command in parenSplit(command):
+                if command[command.rfind(")"):].find(",") != -1:
+                    repeat = int(command[command.rfind(",")+1:])
+                    #print ("Repeating %s times" % repeat)
                 paramString = command[command.find("(")+1:command.rfind(")")]
                 command = command[:command.find("(")]
                 if command == "set":
-                    print ("SET called on %s" % paramString)
+                    #print ("SET called on %s" % paramString)
                     if ',' in paramString:
                         (paramString,value) = paramString.split(',')
                     else:
@@ -291,20 +321,49 @@ def exec_macro(commandFromSettings,query):
                 elif command == "clear":
                     setStatus(paramString,"0",newquery)
                 elif command == "sleep":
-                    time.sleep(float(paramString))
+                    for count in range(0,repeat):
+                        time.sleep(float(paramString))
                 elif command == "toggle":
                     if getStatus(paramString,query) == "0":
                         setStatus(paramString,"1",newquery)
                     else:
                         setStatus(paramString,"0",newquery)
+                #- min/max function is ...
+                #- getmyval = .min(hello,23,45,12)
+                #- getmyval would set "hello" to 12
+                elif command == "min":
+                    params = paramString.split(',')
+                    varname = params.pop(0)
+                    setStatus(varname,str(min(params)),newquery)
+                elif command == "max":
+                    params = paramString.split(',')
+                    varname = params.pop(0)
+                    setStatus(varname,str(max(params)),newquery)
                 elif command == "inc":
-                    incrementvar(paramString)
+                    for count in range(0,repeat):
+                        if ',' in paramString:
+                            params = paramString.split(',')
+                            incrementVar(params[0],params[1],newquery)
+                        else:
+                            incrementVar(paramString,newquery)
                 elif command == "dec":
-                    decrementVar(paramString)
+                    for count in range(0,repeat):
+                        if ',' in paramString:
+                            params = paramString.split(',')
+                            decrementVar(params[0],params[1],newquery)
+                        else:
+                            decrementVar(paramString,newquery)
+                elif command == "expr":
+                    #print ("Unpacking %s" % paramString)
+                    for count in range(0,repeat):
+                        (var,expr) = paramString.split('=')
+                        (val1,op,val2) = filter(None,re.split(r'([+\-/*])',expr))
+                        mathOp(var.strip(),op.strip(),val1.strip(),val2.strip(),newquery)
                 elif command == "cancel":
                     cancelEvent(paramString)
                 elif command == "print":
-                    cprint ("  > "+expandVariables(getStatus(paramString,query),query),"white")
+                    for count in range(0,repeat):
+                        cprint ("  > "+expandVariables(getStatus(paramString,query),query),"white")
                 elif command.startswith('timer'):
                     minutes = "0" + command[5:]
                     seconds = float(minutes) * 60 + query['deviceDelay']
@@ -313,8 +372,9 @@ def exec_macro(commandFromSettings,query):
                         eventName = eventName[:-2]
                     elif eventName.endswith("off"):
                         eventName = eventName[:-3]
-                    eventList.add(eventName+"-"+str(timerCount),seconds,"."+paramString,newquery)
-                    timerCount = timerCount + 1
+                    for count in range(0,repeat):
+                        eventList.add(eventName+"-"+str(timerCount),seconds,"."+paramString,newquery)
+                        timerCount = timerCount + 1
                 else:
                     #cprint("command = %s, param = %s" % (command,paramString), "magenta")
                     if ',' in paramString and '=' in paramString:
@@ -329,13 +389,14 @@ def exec_macro(commandFromSettings,query):
                             newquery['button'] = getStatus(paramString)
                         else:
                             newquery['button'] = paramString
-                    if command == "logic":
-                        execute_logicnode_raw(newquery)
-                    elif command == "event":
-                        execute_event_raw(newquery['device']+"-"+str(int(time.time()))[5:],newquery)
-                    else:
-                        if checkConditionals(command,newquery) is False:
-                           sendCommand(command,newquery)
+                    for count in range(0,repeat):
+                        if command == "logic":
+                            execute_logicnode_raw(newquery)
+                        elif command == "event":
+                            execute_event_raw(newquery['device']+"-"+str(int(time.time()))[5:],newquery)
+                        else:
+                            if checkConditionals(command,newquery) is False:
+                                sendCommand(command,newquery)
         elif "," in command:
             try:
                 (actualCommand, repeatAmount) = command.split(',')
@@ -443,7 +504,7 @@ def execute_radio(command,query):
                 query['deviceDelay'] = settingsFile.get(section,'deviceDelay')
         newstatus = query["button"]
         if (status == newstatus):
-            #cprint ("RADIO button %s already at state = %s" % (command,status),"cyan")
+            cprint ("RADIO button %s already at state = %s" % (command,status),"cyan")
             return status
         else:
             if settingsFile.has_option(section,"pre"):
@@ -453,7 +514,7 @@ def execute_radio(command,query):
                 sequence = settingsFile.get(section,"sequence").split()
                 start = sequence.index(status)
                 end = sequence.index(newstatus)
-                print ("start: %s end: %s" % (start,end))
+#                print ("start: %s end: %s" % (start,end))
                 if end > start:
                     for i in range(start,end):
                         onCommand = settingsFile.get(section,sequence[i])

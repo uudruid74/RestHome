@@ -32,14 +32,11 @@ try:
             del Real['StartupCommand']
             del Real['Comment']
             del Real['BaseType']
-            if 'Set' in Real:
-                del Real['Set']
-            if 'Find' in Real:
-                del Real['Find']
+            #- Should merge these, not delete
             if 'Icons' in Real:
                 del Real['Icons']
-            if 'Method' in Real:
-                del Real['Method']
+            if 'Virtualize' in Real:
+                Real = Real['virtualize'](Real)
             Dev.update(Real)
         else:
             return False

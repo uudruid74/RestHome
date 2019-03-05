@@ -136,7 +136,7 @@ def sendCommand(command,device,deviceName,params):
     se = params['command'] + ' side-effect'
     if command is False and se in params and params[se] is True:
         #- Silently ignore commands that are just used for side-effects
-        # print ("Ignoring %s" % se)
+        print ("Ignoring %s" % se)
         return False
     if command is False:
         cprint("broadlink: There is no code defined for %s" % params['command'],"yellow")
