@@ -71,7 +71,6 @@ The [General] section contains the following optional parameters
 - **AllowOverwrite** = if set to anything, allow learned commands to overwrite an existing entry.  The default is to deny a command that is already learned
 - **RestrictAccess** = restrict all operations to this list of IPs
 - **Password** = allow password-protected POST operations from any address
-- **MaxThreads** = maximum number of processing threads, defaults to 16
 - **Hostname** = remote hostname for forming URLs in local media and UI tools
 - **House** = name of a device representing the entire house
 
