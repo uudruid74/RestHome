@@ -5,7 +5,7 @@ import threading
 import settings
 import macros
 import traceback
-from devices import cprint
+from devices import logfile
 
 try:
 #- Any early startup code for these devices
@@ -24,7 +24,7 @@ try:
             device.real = Dev['Actual']
             Dev['BaseType'] = "virtual"
             if device.real not in devices.Dev:
-                cprint ("I can't find the %s device" % device.real, "yellow")
+                logfile ("I can't find the %s device" % device.real, "ERROR")
                 return False
             #- Never inherit these items from the real device
             Real = devices.Dev[device.real].copy()
@@ -51,6 +51,7 @@ try:
         Dev['getStatus'] = getStatus
         Dev['setStatus'] = setStatus
         Dev['getSensor'] = getSensor
+        Dev['threads'] = 0
         return device
 
 
@@ -116,6 +117,6 @@ try:
 
 
 except ImportError as e:
-    cprint ("Virtual Device support is not available.  Please report this bug!", "red")
+    logfile ("Virtual Device support is not available.  Please report this bug!", "WARN")
 
 

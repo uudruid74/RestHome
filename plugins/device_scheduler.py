@@ -5,7 +5,7 @@ import settings
 import macros
 import traceback
 import time
-from devices import cprint
+from devices import logfile
 
 #- The Scheduler is a sort of virtual device that can implement a variety
 #- of scheduler options.  Each "device" is a schedule that can be 
@@ -132,7 +132,7 @@ def readSettings(settingsFile,devname):
 
         return device
     except Exception as e:
-        cprint ("Scheduler Initialization Failed!", "red")
+        logfile ("Scheduler Initialization Failed!", "WARN")
         traceback.print_exc()
         return None
 
@@ -170,7 +170,7 @@ def sendCommand(command,device,deviceName,params):
             return True
         return False
     except Exception as e:
-        cprint("cron sendCommand: %s to %s failed: %s" % (params['command'],deviceName,e),"yellow")
+        logfile("cron sendCommand: %s to %s failed: %s" % (params['command'],deviceName,e),"ERROR")
         traceback.print_exc()
         return False
 

@@ -5,7 +5,7 @@ import settings
 import macros
 import traceback
 import time
-from devices import cprint
+from devices import logfile
 
 try:
     devices.Modlist['logger'] = True
@@ -58,7 +58,7 @@ def sendCommand(command,device,deviceName,params):
         os.fsync(device.fileh)
     except Exception as e:
         traceback.print_exc()
-        cprint ("Error Writing to %s: %s" % (device.filename, e),"yellow")
+        logfile ("Error Writing to %s: %s" % (device.filename, e),"ERROR")
         return False
     return True
 

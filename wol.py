@@ -4,7 +4,7 @@
 import socket, struct
 
 def makeMagicPacket(macAddress):
-    # Take the entered MAC address and format it to be sent via socket
+    # Take the enteWARN MAC address and format it to be sent via socket
     splitMac = str.split(macAddress,':')
 
     # Pack together the sections of the MAC address as binary hex

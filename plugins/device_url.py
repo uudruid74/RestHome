@@ -7,7 +7,7 @@ import traceback
 import time
 import json
 import re
-from devices import cprint
+from devices import logfile
 
 try:
     import requests
@@ -20,7 +20,7 @@ except ImportError as e:
 
 def discover(settingsFile,timeout,listen,broadcast):
     if 'requests' not in devices.Modlist:
-        cprint ("URL/Webhook device support requires 'requests' python module.", "red")
+        logfile ("URL/Webhook device support requires 'requests' python module.", "WARN")
         return False
 
     default = "IFTTT"
@@ -42,7 +42,7 @@ def discover(settingsFile,timeout,listen,broadcast):
         settingsFile.write(ControlIniFile)
         ControlIniFile.close()
     except Exception as e:
-        cprint ("Error writing settings file: %s" % e,"yellow")
+        logfile ("Error writing settings file: %s" % e,"ERROR")
         settings.restoreSettings()
 
 
@@ -51,7 +51,7 @@ def readSettings(settingsFile,devname):
     if Dev['Type'] == 'URL':
         Dev['BaseType'] = "url"
         if 'requests' not in devices.Modlist:
-            cprint ("URL/Webhook device support requires 'requests' python module.", "red")
+            logfile ("URL/Webhook device support requires 'requests' python module.", "WARN")
             return False
         device = type('', (), {})()
         device.url = Dev['URL']
@@ -76,6 +76,7 @@ def readSettings(settingsFile,devname):
     Dev['setStatus'] = None
     Dev['getSensor'] = None
     Dev['virtualize'] = virtualize
+    Dev['startup'] = startup
     return device
 
 def virtualize(real):
@@ -105,9 +106,9 @@ def sendCommand(command,device,deviceName,params):
                 if 'retries' not in params:
                     params['retries'] = 0
                 if params["retries"] > 2:
-                    cprint ("%s (Error %s): FAILED" % (params['command'],r.status_code),"red")
+                    logfile ("%s (Error %s): FAILED" % (params['command'],r.status_code),"WARN")
                     return False
-                cprint ("%s (Error %s): Waiting 2s ..." % (params['command'],r.status_code),"yellow")
+                logfile ("%s (Error %s): Waiting 2s ..." % (params['command'],r.status_code),"ERROR")
                 params["retries"] = params["retries"] + 1
                 time.sleep(2)
                 return sendCommand(command,device,deviceName,params)
@@ -123,7 +124,7 @@ def sendCommand(command,device,deviceName,params):
                     result = "FOUND: " + match.group()
                 else:
                     result = "NOT FOUND.  Response: " + result[:40]
-            cprint("  # %s/%s: %s" % (deviceName,params['command'],result[:60]),"green")
+            logfile("  # %s/%s: %s" % (deviceName,params['command'],result[:60]),"DEBUG")
             time.sleep(float(params['deviceDelay']))
             return True
         return False
@@ -135,11 +136,11 @@ def sendCommand(command,device,deviceName,params):
             raise # Not error we are looking for
         else:
             params["retries"] = params["retries"] + 1
-            cprint ("CONNECTION ERROR(%s): Waiting 2s ..." % params['command'],"yellow")
+            logfile ("CONNECTION ERROR(%s): Waiting 2s ..." % params['command'],"ERROR")
             time.sleep(2)
             return sendCommand(command,device,deviceName,params)
     except Exception as e:
-        cprint("url sendCommand: %s to %s failed: %s" % (params['command'],deviceName,e),"yellow")
+        logfile("url sendCommand: %s to %s failed: %s" % (params['command'],deviceName,e),"ERROR")
 #        traceback.print_exc()
         return False
 
@@ -151,5 +152,4 @@ def startup(setit,getit,sendit):
 
 devices.addDiscover(discover)
 devices.addReadSettings(readSettings)
-devices.addStartup(startup)
 

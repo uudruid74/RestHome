@@ -1,11 +1,20 @@
 import threading
 import termcolor
 from collections import defaultdict
-import threading
+import threadpool
 
 global Dev
 global DevList
 global HomeDevice
+
+#- LOGLEVEL
+#- 0 = Special      3 = Events      6 = Debug
+#- 1 = Errors       4 = Info
+#- 2 = Warning      5 = Logs
+
+LogLevel = 3
+LogLevels = [ 'SPECIAL', 'ERROR', 'WARN', 'EVENT', 'INFO', 'LOG', 'DEBUG' ]
+LogColors = [ 'magenta', 'red', 'yellow', 'blue', 'white', 'cyan', 'green' ]
 
 DeviceByName = {}
 DevList = []
@@ -16,37 +25,36 @@ CustomDash = False
 
 FuncDiscover = []
 FuncReadSettings = []
-FuncStartup = []
 FuncShutdown = []
 SettingsLock = threading.RLock()
+OutputLock = threading.RLock()
 LastThreadId = 0
-LastColor = "grey"
+LastLevel = 'INFO'
 LastEnd = "\n"
 
-def cprint(body,color="grey",end="\n"):
+def logfile(body,level='INFO',end="\n"):
     global LastThreadId
-    global LastColor
+    global LastLevel
     global LastEnd
-    thread = threading.get_ident()
-    try:
-        if LastThreadId != thread or LastColor != color:
-            if LastEnd != "\n":
-                print ("")
-    except Exception as e:
-        pass
-    LastThreadId = thread
-    LastColor = color
-    LastEnd = end
-    termcolor.cprint(body,color=color,end=end)
+    with OutputLock:
+        thread = threading.get_ident()
+        if LogLevel >= LogLevels.index(level):
+            try:
+                if LastThreadId != thread or LastLevel != level:
+                    if LastEnd != "\n":
+                        print ("")
+                LastThreadId = thread
+                LastLevel = level
+                LastEnd = end
+            except Exception as e:
+                pass
+            termcolor.cprint(body,color=LogColors[LogLevels.index(level)],end=end)
 
 def addDiscover(func):
     FuncDiscover.append(func)
 
 def addReadSettings(func):
     FuncReadSettings.append(func)
-
-def addStartup(func):
-    FuncStartup.append(func)
 
 def addShutdown(func):
     FuncShutdown.append(func)
@@ -83,7 +91,7 @@ def readSettings (settings,devname):
         retvalue = func(settings,devname)
         if retvalue is not False:
             return retvalue
-    cprint ("I don't know the type of device for %s" % devname,"yellow")
+    logfile("I don't know the type of device for %s" % devname,"ERROR")
 
 def dumpDevices():
     retval = '''{\n\t"ok": "deviceList"'''
@@ -117,9 +125,13 @@ def dumpRooms():
 #- StartupCommand.  
 #- Only on final shutdown is the shutdown callback made
 
-def startUp(globalSet,globalGet,globalSend):
-    for func in FuncStartup:
-        func(globalSet,globalGet,globalSend)
+def startUp(sock,addr,globalSet,globalGet,globalSend,handler):
+    for dev in DeviceByName:
+        if 'threads' in Dev[dev]:
+            for i in range(1,Dev[dev]['threads']):
+                threadpool.Thread(dev,sock,addr,handler,globalSend,globalGet,globalSet);
+        else:
+            threadpool.Thread(dev,sock,addr,handler,globalSend,globalGet,globalSet);
 
 def shutDown(globalSet,globalGet):
     for func in FuncShutdown:

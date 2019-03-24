@@ -2,11 +2,12 @@
 #- Note python 3.6 or later now required!
 import os
 from importlib import reload
-import devices
 import settings
 import traceback
 import datetime
+import devices
 import threading
+import threadpool
 import configparser
 import sys
 import getopt
@@ -22,68 +23,21 @@ import collections
 import platform
 import pdb
 import socketserver
-import http.server
 import mimetypes
-from devices import cprint
-
-THROTTLE = 8    #- spawn per second
-
+import http.server
+from devices import logfile
 from plugins import *
 
 def reloadAll():
     reload(devices)
-    reload(device_broadlink)
-    reload(device_url)
-    reload(device_gpio)
-    reload(device_scheduler)
-    reload(device_log)
-    reload(device_virtual)
+    reload(plugins)
+#    reload(device_broadlink)
+#    reload(device_url)
+#    reload(device_gpio)
+#    reload(device_scheduler)
+#    reload(device_log)
+#    reload(device_virtual)
     reload(settings)
-
-class ThreadId(threading.local):
-    def __init__(self):
-        self.val = {}
-
-class Thread(threading.Thread):
-    def __init__(self, i, sock, addr, timeout):
-        global threadid
-        threading.Thread.__init__(self)
-        self.threadid = i
-        self.sock = sock
-        self.addr = addr
-        self.timeout = timeout
-        self.daemon = True
-        time.sleep(i/THROTTLE)
-        self.start()
-
-    def run(self):
-        httpd = http.server.HTTPServer(self.addr, Handler, False)
-
-        # Prevent the HTTP server from re-binding every handler.
-        # https://stackoverflow.com/questions/46210672/
-        httpd.socket = self.sock
-        httpd.threadid = self.threadid
-        httpd.server_bind = self.server_close = lambda self: None
-        while not InterruptRequested.is_set():
-#            print ("Start thread %s" % self.threadid)
-            timer = min(self.timeout,macros.eventList.nextEvent())
-            while timer < 1:
-                event = macros.eventList.pop()
-                cprint ("  = EVENT (%s) %s/%s" % (datetime.datetime.now().strftime("%I:%M:%S"),event.params['device'],event.name),"blue")
-                if event.name.startswith("POLL_"):
-                    (POLL,devicename,argname) = event.name.split('_',2)
-                    value = devices.Dev[devicename]["pollCallback"](devicename,argname,event.command,event.params)
-                    if value is not False:
-                        if value is not None and value != '':
-                            setStatus(argname,str(value),event.params)
-                        sendCommand(event.command,event.params)
-                else:
-                    sendCommand(event.command,event.params)
-                timer = min(self.timeout,macros.eventList.nextEvent())
-            httpd.timeout = timer
-            httpd.handle_request()
-            time.sleep(MaxThreads/THROTTLE)
-#            print ("End thread %s" % self.threadid)
 
 class Handler(http.server.BaseHTTPRequestHandler):
     # Parameters = collections.defaultdict(lambda : ' ')
@@ -124,8 +78,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return remote_ip
 
     def log_message(self, format, *args):
-        sys.stderr.write("%s/%s - - [%s] %s\n" %
-            (str(self.server.threadid).rjust(2),self.client_ip(),self.log_date_time_string(),format%args))
+        logfile("%s/%s - - [%s] %s" %
+            (str(self.server.threadid).rjust(2),self.client_ip(),self.log_date_time_string(),format%args),"INFO")
 
     def do_OPTIONS(self):
         self.send_response(200, "ok")
@@ -143,7 +97,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         return self.access_denied()
                     return self.messageHandler()
                 except NameError as e:
-                    cprint ("Error: %s" % e,"yellow")
+                    logfile ("Error: %s" % e,"ERROR")
                     traceback.print_exc()
                     self.password_required()
             else:
@@ -169,7 +123,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if GlobalPassword and GlobalPassword == password:
                 return self.messageHandler()
             else:
-                cprint ('''POST Password Wrong: "%s"''' % password,"red")
+                logfile ('''POST Password Wrong: "%s"''' % password,"WARN")
         except NameError:
                 return self.password_required()
         self.password_required()
@@ -178,7 +132,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         response = "POST Password required from %s" % self.client_ip()
         self._set_headers(self.path)
         self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
-        cprint (response,"red")
+        logfile (response,"WARN")
         #self.close_connection = True
         return False
 
@@ -186,7 +140,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         response = "Client %s is not allowed to use GET!" % self.client_ip()
         self._set_headers(self.path)
         self.wfile.write(bytes('''{ "error": "%s" }''' % response,'utf-8'))
-        cprint (response,"red")
+        logfile (response,"WARN")
         #self.close_connection = True
         return False
 
@@ -208,7 +162,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if 'learnCommand' in self.path:
             try:
                 if self.client_ip() not in LearnFrom:
-                    cprint ("Won't learn commands from %s.  Access Denied!" % self.client_ip(),"red",attrs=['bold'])
+                    logfile ("Won't learn commands from %s.  Access Denied!" % self.client_ip(),"WARN",attrs=['bold'])
                     return False
             except NameError:
                 pass
@@ -332,9 +286,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             try:
                 with open(filename,'rb') as f:
                     socket.sendfile(f,0)
-                cprint("\t%s\n" % filename,"cyan")
+                logfile("\t%s\n" % filename,"LOG")
             except Exception as e:
-                cprint("\t%s - %s\n" % (filename,e),"red")
+                logfile("\t%s - %s\n" % (filename,e),"WARN")
             return
 
         elif 'getCustomDash' in self.path:
@@ -394,13 +348,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             try:
                 with open(path,'rb') as f:
                     socket.sendfile(f,0)
-                cprint("\t%s\n" % path,"cyan")
+                logfile("\t%s\n" % path,"LOG")
             except Exception as e:
-                cprint("\t%s - %s\n" % (path,e),"red")
+                logfile("\t%s - %s\n" % (path,e),"WARN")
             return
 
         elif self.path is '/':
-            #cprint("Default Site","red")
+            #logfile("Default Site","WARN")
             return
 
         elif 'getSensor' in self.path:
@@ -424,7 +378,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(bytes(response,'utf-8'))
         else:
             self.wfile.write(bytes('''{ "ok": "%s" }''' % response,'utf-8'))
-#        cprint (response+"\n","white")
+#        logfile (response+"\n","INFO")
 #        print("")
 
 
@@ -451,7 +405,7 @@ def sendCommand(commandName,params):
     params["command"] = commandName #- VERY IMPORTANT!
 
     if commandName is None or commandName is False or type(commandName) is bool:
-        cprint ("Check your setting.ini for invalid syntax!!","yellow")
+        logfile ("Check your setting.ini for invalid syntax!!","ERROR")
         traceback.print_exc()
         return False
     if commandName.strip() != '':
@@ -513,7 +467,7 @@ def getType(statusName,params):
     if deviceName in devices.DeviceByName:
         device = devices.DeviceByName[deviceName]
     else:
-        cprint ("Failed: No such device, %s" % deviceName, "yellow")
+        logfile ("Failed: No such device, %s" % deviceName, "ERROR")
         return False
 
     sectionName = "RADIO " + statusName
@@ -543,16 +497,16 @@ def learnCommand(commandName, params):
             device = devices.DeviceByName[deviceName]
             sectionName = deviceName + ' Commands'
         else:
-            cprint ("Failed: No such device, %s" % deviceName,"yellow")
+            logfile ("Failed: No such device, %s" % deviceName,"ERROR")
             return False
         if OverwriteProtected and settingsFile.has_option(sectionName,commandName):
-            cprint ("Command %s alreadyExists and changes are protected!" % commandName,"yellow")
+            logfile ("Command %s alreadyExists and changes are protected!" % commandName,"ERROR")
             return False
     except Exception as e:
         traceback.print_exc()
 
     with devices.Dev[deviceName]['Lock']:
-        cprint ("Waiting %d seconds to capture command" % GlobalTimeout,"magenta")
+        logfile ("Waiting %d seconds to capture command" % GlobalTimeout,"SPECIAL")
 
         decodedCommand = devices.Dev[deviceName]['learnCommand'](deviceName,device,params)
         with devices.SettingsLock:
@@ -566,7 +520,7 @@ def learnCommand(commandName, params):
                 ControlIniFile.close()
                 return commandName
             except Exception as e:
-                cprint("Error writing settings file: %s" % e,"yellow")
+                logfile("Error writing settings file: %s" % e,"ERROR")
                 traceback.print_exc()
                 settings.restoreSettings()
     return False
@@ -612,7 +566,7 @@ def setStatus(commandName, status, params):
             settingsFile.write(ControlIniFile)
             ControlIniFile.close()
     except Exception as e:
-        cprint ("Error writing settings file: %s" % e,"yellow")
+        logfile ("Error writing settings file: %s" % e,"ERROR")
         traceback.print_exc()
         settings.restoreSettings()
         return oldvalue
@@ -633,12 +587,12 @@ def setStatus(commandName, status, params):
                     params[commandName+' side-effect'] = True
                     macros.eventList.add("%s-TRIGGER" % commandName,0,rawcommand,params)
             except Exception as e:
-                cprint("TRIGGER %s: A command or on/off pair is required" % commandName, "yellow")
-                cprint ("ERROR was %s" % e,"yellow")
+                logfile("TRIGGER %s: A command or on/off pair is required" % commandName, "ERROR")
+                logfile ("ERROR was %s" % e,"ERROR")
     elif settingsFile.has_section("LOGIC "+commandName):
         params[commandName+' side-effect'] = True
         macros.eventList.add("%s-LOGIC" % commandName,0,commandName,params)
-        cprint ("Queued LOGIC branch: %s" % commandName,"cyan")
+        logfile ("Queued LOGIC branch: %s" % commandName,"LOG")
     return status
 
 #- Use getStatus to read variables, either from the settings file or device
@@ -670,7 +624,7 @@ def getStatus(commandName, params):
         params["globalVariable"] = commandName
         if status:
             return status
-    print ("Can't find %s %s" % (sectionName, commandName))
+    logfile("Can't find %s %s" % (sectionName, commandName),"WARN")
     return "0"
 
 
@@ -701,24 +655,22 @@ def getSensor(sensorName,params):
     return False
 
 
-def start(handler_class=Handler, threads=8, port=8080, listen='0.0.0.0', timeout=20):
+def start(handler_class=Handler, port=8080, listen='0.0.0.0'):
     addr = (listen,port)
     if settings.Hostname == "localhost":
         name=''
     else:
         name = settings.Hostname + " "
-    cprint ('\nStarting RestHome server %son %s:%s ...\n' % (name,listen,port),"yellow")
+    logfile ('\nStarting RestHome server %son %s:%s ...\n' % (name,listen,port),"SPECIAL")
     sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(addr)
     sock.listen(5)
-
-    [Thread(i,sock,addr,timeout) for i in range(threads)]
-    while not InterruptRequested.is_set():
-        InterruptRequested.wait(timeout)
-    cprint("Closing Server ...", "green")
+    devices.startUp(sock,addr,setStatus,getStatus,sendCommand,handler_class)
+    while not threadpool.InterruptRequested.is_set():
+        threadpool.InterruptRequested.wait(2)
+    logfile("Closing Server ...", "SPECIAL")
     sock.close()
-
 
 
 def readSettingsFile(settingsFile):
@@ -757,11 +709,6 @@ def readSettingsFile(settingsFile):
     if settingsFile.has_option('General', 'RestrictAccess'):
         RestrictAccess = settingsFile.get('General', 'RestrictAccess').strip()
 
-    global MaxThreads
-    if settingsFile.has_option('General', 'MaxThreads'):
-        MaxThreads = int(settingsFile.get('General','MaxThreads'))
-    else:
-        MaxThreads = 16
     if settingsFile.has_option('General', 'LearnFrom'):
         LearnFrom = settingsFile.get('General', 'LearnFrom').strip();
 
@@ -786,7 +733,7 @@ def readSettingsFile(settingsFile):
         Autodetect = True
 
     if Autodetect == True:
-        cprint ("Beginning device auto-detection ... ","cyan")
+        logfile ("Beginning device auto-detection ... ","LOG")
         # Try to support multi-homed broadcast better
         devices.discover(settingsFile,DiscoverTimeout,listen_address,broadcast_address)
         print()
@@ -797,6 +744,9 @@ def readSettingsFile(settingsFile):
         for devname in devices.DevList:
             devices.Dev[devname]['BaseType'] = 'unknown'
             device = devices.readSettings(settingsFile,devname)
+            if device == None:
+                devices.Dev[devname]['threads'] = 0
+                continue
             if devices.Dev[devname]['BaseType'] != 'virtual':
                 devtype = devices.Dev[devname]['Type']
                 devices.Dev[devname]['Lock'] = threading.RLock()
@@ -807,7 +757,7 @@ def readSettingsFile(settingsFile):
                 comment = ' (' + devices.Dev[devname]['Comment'].strip()+')'
             else:
                 comment = ''
-            print("Configured %s%s as %s/%s" % (devname,comment,devices.Dev[devname]['BaseType'],devtype))
+            logfile("Configured %s%s as %s/%s" % (devname,comment,devices.Dev[devname]['BaseType'],devtype),"WARN")
             if not devname in devices.DeviceByName:
                 devices.DeviceByName[devname] = device
             #device.hostname = devname
@@ -819,40 +769,36 @@ def readSettingsFile(settingsFile):
                 query["device"] = devname
                 macros.eventList.add("Startup "+devname,1,commandName,query)
 
-    return { "port": serverPort, "listen": listen_address, "threads": MaxThreads, "timeout": GlobalTimeout }
+    return { "port": serverPort, "listen": listen_address }
 
 
 def SigUsr1(signum, frame):
-    cprint ("\nReload requested ... (this will take awhile)","cyan")
-    InterruptRequested.set()
+    logfile ("\nReload requested ... (this will take awhile)","LOG")
+    threadpool.InterruptRequested.set()
 
 
 def SigInt(signum, frame):
-    if InterruptRequested.is_set():
+    if threadpool.InterruptRequested.is_set():
         print ("\n\nAborting!\n")
         exit()
-    cprint ("\nShuting down server ...","cyan")
-    ShutdownRequested.set()
-    InterruptRequested.set()
+    logfile ("\nShuting down server ...","SPECIAL")
+    threadpool.ShutdownRequested.set()
+    threadpool.InterruptRequested.set()
 
 
 if __name__ == "__main__":
-    ShutdownRequested = threading.Event()
-    InterruptRequested = threading.Event()
-
     if platform.system() != "Windows":
         signal.signal(signal.SIGUSR1,SigUsr1)
         signal.signal(signal.SIGINT,SigInt)
-    while not ShutdownRequested.is_set():
-        InterruptRequested.clear()
+    while not threadpool.ShutdownRequested.is_set():
+        threadpool.InterruptRequested.clear()
         settingsFile = configparser.ConfigParser()
         serverParams = None
         while serverParams is None:
             serverParams = readSettingsFile(settingsFile)
         macros.init_callbacks(settingsFile,sendCommand,getStatus,setStatus,toggleStatus)
-        devices.startUp(setStatus,getStatus,sendCommand)
         start(**serverParams)
-        cprint("\nShutting down devices ...")
+        logfile("\nShutting down devices ...")
         for devname in devices.DeviceByName:
             if devices.Dev[devname]['ShutdownCommand'] != None:
                 commandName = devices.Dev[devname]['ShutdownCommand']
@@ -865,8 +811,8 @@ if __name__ == "__main__":
                 else:
                     query['deviceDelay'] = 0.2
                 sendCommand(commandName,query)
-        if not ShutdownRequested.is_set():
+        if not threadpool.ShutdownRequested.is_set():
             time.sleep(20)
-            cprint ("Reloading configuration ...\n","cyan")
+            logfile ("Reloading configuration ...\n","WARN")
             reloadAll()
     devices.shutDown(setStatus,getStatus)

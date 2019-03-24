@@ -7,7 +7,7 @@ import macros
 import binascii
 import traceback
 import time
-from devices import cprint
+from devices import logfile
 
 try:
     import broadlink
@@ -29,7 +29,7 @@ except ImportError as e:
 
 def discover(settingsFile,timeout,listen,broadcast):
     if 'broadlink' not in devices.Modlist:
-        cprint ("Broadlink device support requires broadlink python module.\npip3 install broadlink", "red")
+        logfile ("Broadlink device support requires broadlink python module.\npip3 install broadlink", "WARN")
         return False
     print ("\tDetecting Broadlink devices ...")
     try:
@@ -61,7 +61,7 @@ def discover(settingsFile,timeout,listen,broadcast):
         settingsFile.write(ControlIniFile)
         ControlIniFile.close()
     except Exception as e:
-        cprint ("Error writing settings file: %s" % e,"yellow")
+        logfile ("Error writing settings file: %s" % e,"ERROR")
         settings.restoreSettings()
 
 
@@ -104,7 +104,7 @@ def readSettings(settingsFile,devname):
         Dev['getSensor'] = getSensor
         return device
     except Exception as e:
-        cprint ("Broadlink device support requires broadlink python module.\npip3 install broadlink", "red")
+        logfile ("Broadlink device support requires broadlink python module.\npip3 install broadlink", "WARN")
         return None
 
 def learnCommand(devname,device,params):
@@ -120,7 +120,7 @@ def learnCommand(devname,device,params):
             LearnedCommand = device.check_data()
 
         if LearnedCommand is None:
-            cprint('Command not received',"yellow")
+            logfile('Command not received',"ERROR")
             return False
 
         AdditionalData = bytearray([0x00, 0x00, 0x00, 0x00])
@@ -139,7 +139,7 @@ def sendCommand(command,device,deviceName,params):
         print ("Ignoring %s" % se)
         return False
     if command is False:
-        cprint("broadlink: There is no code defined for %s" % params['command'],"yellow")
+        logfile("broadlink: There is no code defined for %s" % params['command'],"ERROR")
         return False
     try:
         decodedCommand = binascii.unhexlify(command)
@@ -150,7 +150,7 @@ def sendCommand(command,device,deviceName,params):
         if command is False:
             command = params['command']
             e = "command is undefined"
-        cprint("broadlink sendCommand: %s to %s failed: %s" % (command,deviceName,e),"yellow")
+        logfile("broadlink sendCommand: %s to %s failed: %s" % (command,deviceName,e),"ERROR")
         traceback.print_exc()
         return False
     try:
@@ -161,7 +161,7 @@ def sendCommand(command,device,deviceName,params):
             time.sleep(float(params['deviceDelay']))
     except Exception as e:
         traceback.print_exc()
-        cprint ("Probably timed out..","yellow")
+        logfile ("Probably timed out..","ERROR")
         return False
     return True
 
@@ -193,10 +193,10 @@ def getSensor(sensorName,params):
                     time.sleep(float(params['deviceDelay']))
                 return result[sensorName]
         else:
-            #cprint ("I don't know how to find %s for a %s" % (sensorName,Dev['Type']), "yellow")
+            #logfile ("I don't know how to find %s for a %s" % (sensorName,Dev['Type']), "ERROR")
             return False
     except Exception as e:
-        cprint ("Error finding sensor %s in %s: %s" % (sensorName,deviceName,e),"yellow")
+        logfile ("Error finding sensor %s in %s: %s" % (sensorName,deviceName,e),"ERROR")
         traceback.print_exc()
     return False
 

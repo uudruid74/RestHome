@@ -10,7 +10,6 @@ import threading
 import sys
 import traceback
 import devices
-from devices import cprint
 
 def append(a,b):
     if a.strip() == '':
@@ -71,7 +70,7 @@ class EventList(object):
         with self.lock:
             found = self.find(name)
             if found:
-                #cprint("Deleting old event: %s=%s" % (found.name,found.command),"yellow")
+                #devices.logfile("Deleting old event: %s=%s" % (found.name,found.command),"ERROR")
                 ret = self.delete(name)
             newparams = params.copy()
             newparams['serialize'] = True
@@ -137,7 +136,7 @@ def expandVariables(commandString,query):
     while statusVar > -1:
         endVar = commandString.find(")",statusVar)
         if endVar < 0:
-            cprint ("No END Parenthesis found in $status variable","yellow")
+            devices.logfile ("No END Parenthesis found in $status variable","ERROR")
             statusVar = -1
         varname = commandString[statusVar+8:endVar]
         varvalue = getStatus(varname,newquery)
@@ -158,7 +157,7 @@ def parenSplit(parenstring):
         if c == ')':
             nesting -= 1;
             if nesting < 0:
-                cprint("Malformed command - parenthesis don't match at %s: %s" % (ccount,parenstring))
+                devices.logfile("Malformed command - parenthesis don't match at %s: %s" % (ccount,parenstring))
             elif nesting == 0:
                 #- found substring
                 if ccount+1 < len(parenstring):
@@ -176,7 +175,7 @@ def parenSplit(parenstring):
 
 def relayTo(device,query):
     if device == query['device']:
-        cprint ("RELAY %s attempted to relay to itself" % query['command'],"yellow")
+        devices.logfile ("RELAY %s attempted to relay to itself" % query['command'],"ERROR")
         return True
     newquery = query.copy()
     newquery['device'] = device
@@ -226,7 +225,7 @@ def checkMacros(OcommandFromSettings,query):
         return False
 
     if commandFromSettings.startswith("PRINT "):
-        cprint ("  > "+expandVariables(commandFromSettings[6:],query),"white")
+        devices.logfile ("  > "+expandVariables(commandFromSettings[6:],query),"INFO")
         return True
     elif commandFromSettings == "NOP" or commandFromSettings.startswith("#"):
         return True
@@ -272,7 +271,7 @@ def checkMacros(OcommandFromSettings,query):
             with devices.Dev[deviceName]['Lock']:
                 exec_macro(commandFromSettings,query)
         else:
-            print ("Making Event for %s" % commandFromSettings)
+            devices.logfile("Making Event for %s" % commandFromSettings,"LOG")
             eventName = query['command'];
             if eventName.endswith('on'):
                 eventName = eventName[:-2]
@@ -295,7 +294,7 @@ def exec_macro(commandFromSettings,query):
     commandFromSettings = expandedCommand.strip()
     for command in commandFromSettings.split():
         newquery = query.copy()
-        cprint (command,"cyan",end=' ')
+        devices.logfile (command,"LOG",end=' ')
         sys.stdout.flush()
 
         if command == "sleep":
@@ -363,7 +362,7 @@ def exec_macro(commandFromSettings,query):
                     cancelEvent(paramString)
                 elif command == "print":
                     for count in range(0,repeat):
-                        cprint ("  > "+expandVariables(getStatus(paramString,query),query),"white")
+                        devices.logfile ("  > "+expandVariables(getStatus(paramString,query),query),"INFO")
                 elif command.startswith('timer'):
                     minutes = "0" + command[5:]
                     seconds = float(minutes) * 60 + query['deviceDelay']
@@ -376,7 +375,7 @@ def exec_macro(commandFromSettings,query):
                         eventList.add(eventName+"-"+str(timerCount),seconds,"."+paramString,newquery)
                         timerCount = timerCount + 1
                 else:
-                    #cprint("command = %s, param = %s" % (command,paramString), "magenta")
+                    #devices.logfile("command = %s, param = %s" % (command,paramString), "SPECIAL")
                     if ',' in paramString and '=' in paramString:
                         for param in paramString.split(','):
                             pair = param.split('=')
@@ -403,13 +402,13 @@ def exec_macro(commandFromSettings,query):
                 if actualCommand == "sleep":
                     time.sleep(float(repeatAmount))
                 else:
-                    cprint ("\t","green",end='')
+                    devices.logfile ("\t","DEBUG",end='')
                     for x in range(0,int(repeatAmount)):
-                        cprint (actualCommand,"green",end=' ')
+                        devices.logfile (actualCommand,"DEBUG",end=' ')
                         sys.stdout.flush()
                         sendCommand(actualCommand,newquery)
             except Exception as e:
-                cprint ("\nSkipping malformed command: %s, %s" % (command,e),"yellow")
+                devices.logfile ("\nSkipping malformed command: %s, %s" % (command,e),"ERROR")
         else:
             sendCommand(command,newquery)
     sys.stdout.flush()
@@ -417,7 +416,7 @@ def exec_macro(commandFromSettings,query):
 #- Wake On Lan
 def execute_wol(command,query):
     section = "WOL "+command
-    #cprint (section,"green")
+    #devices.logfile (section,"DEBUG")
     try:
         port = None
         mac = expandVariables(settingsFile.get(section,"mac"),query)
@@ -426,12 +425,12 @@ def execute_wol(command,query):
             port = expandVariables(settingsFile.get(section,"port"),query)
         return wol.wake(mac,ip,port)
     except Exception as e:
-        cprint ("WOL Failed: %s" % e,"yellow")
+        devices.logfile ("WOL Failed: %s" % e,"ERROR")
     return False
 
 #- Execute shell command, short MACRO version
 def shellCommand(commandString):
-    #cprint("SH %s" % commandString, "green")
+    #devices.logfile("SH %s" % commandString, "DEBUG")
     (command,sep,parameters) = commandString.partition(' ')
     execCommand = [command,parameters]
     try:
@@ -445,14 +444,14 @@ def shellCommand(commandString):
 #- Execute shell command, section version, with store ability
 def execute_shell(command,query):
     section = "SHELL " + command
-    #cprint (section,"green")
+    #devices.logfile (section,"DEBUG")
     parameters = None
     if settingsFile.has_option(section,"parameters"):
         parameters = expandVariables(settingsFile.get(section,"parameters"),query)
     if settingsFile.has_option(section,"command"):
         command = expandVariables(settingsFile.get(section,"command"),query)
     else:
-        cprint ("You must specify at least a \"command\" for any SHELL command","yellow")
+        devices.logfile ("You must specify at least a \"command\" for any SHELL command","ERROR")
     execCommand = command
     if parameters != None:
         execCommand = [command,parameters]
@@ -478,7 +477,7 @@ def ping(host):
 
 def execute_ping(command,query):
     section = "PING "+command
-    #cprint (section,"green")
+    #devices.logfile (section,"DEBUG")
     try:
         host = expandVariables(settingsFile.get(section,"host"),query)
         if ping(host):
@@ -489,12 +488,12 @@ def execute_ping(command,query):
         result = sendCommand(rawcommand,query)
         return command
     except Exception as e:
-        cprint ("PING Failed: %s" % e,"yellow")
+        devices.logfile ("PING Failed: %s" % e,"ERROR")
     return False
 
 def execute_radio(command,query):
     section = "RADIO " + command
-    #cprint (section,"green")
+    #devices.logfile (section,"DEBUG")
     status = getStatus(command,query)
     try:
         if settingsFile.has_option(section,'device'):
@@ -504,7 +503,7 @@ def execute_radio(command,query):
                 query['deviceDelay'] = settingsFile.get(section,'deviceDelay')
         newstatus = query["button"]
         if (status == newstatus):
-            cprint ("RADIO button %s already at state = %s" % (command,status),"cyan")
+            devices.logfile ("RADIO button %s already at state = %s" % (command,status),"LOG")
             return status
         else:
             if settingsFile.has_option(section,"pre"):
@@ -552,7 +551,7 @@ def execute_radio(command,query):
                 sendCommand(settingsFile.get(section,"post"),query)
         return command
     except Exception as e:
-        cprint ("RADIO %s Failed: %s" % (command,e),"yellow")
+        devices.logfile ("RADIO %s Failed: %s" % (command,e),"ERROR")
     return status
 
 def execute_event_raw(command,query):
@@ -569,7 +568,7 @@ def execute_event_raw(command,query):
         eventList.add(command,delay,newcommand,query)
         return command
     except Exception as e:
-        cprint ("EVENT Failed: %s" % e,"yellow")
+        devices.logfile ("EVENT Failed: %s" % e,"ERROR")
         traceback.print_exc()
     return False
 
@@ -583,7 +582,7 @@ def execute_event(command,query):
         execute_event_raw(command,newquery)
         return "command"
     except Exception as e:
-        cprint ("EVENT Failed: %s" % e,"yellow")
+        devices.logfile ("EVENT Failed: %s" % e,"ERROR")
     return False
 
 def execute_logicnode_raw(query):
@@ -634,21 +633,21 @@ def execute_logicnode_raw(query):
         if "error" in query:
             newcommand = expandVariables(query['error'],query)
             return sendCommand("." + newcommand,query)
-        cprint ("LOGIC Failed: %s" % e, "yellow")
+        devices.logfile ("LOGIC Failed: %s" % e, "ERROR")
         traceback.print_exc()
         return False
 
 #- LogicNode multi-branch conditional
 def execute_logicnode(command,query):
     section = "LOGIC "+command
-    #cprint (section,"green")
+    #devices.logfile (section,"DEBUG")
     newcommand = None
     newquery = query.copy()
     newquery['command'] = command
     if settingsFile.has_option(section,"test"):
         newquery["test"] = expandVariables(settingsFile.get(section,"test"),query)
     else:
-        cprint ("LOGIC Failed: A test value is required","yellow")
+        devices.logfile ("LOGIC Failed: A test value is requiWARN","ERROR")
         return
     for var in settingsFile.options(section):
         newquery[var] = settingsFile.get(section,var)

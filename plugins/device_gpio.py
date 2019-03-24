@@ -5,7 +5,7 @@ import settings
 import macros
 import traceback
 import time
-from devices import cprint
+from devices import logfile
 
 try:
     import Adafruit_BBIO.ADC as ADC
@@ -27,7 +27,7 @@ except ImportError as e:
 
 def discover(settingsFile,timeout,listen,broadcast):
     if 'gpio' not in devices.Modlist:
-        cprint ("GPIO device support requires Adafruit python module.\npip3 install Adafruit_BBIO", "red")
+        logfile ("GPIO device support requires Adafruit python module.\npip3 install Adafruit_BBIO", "WARN")
         return False
     print ("\tDetecting GPIO devices is currently unsupported...")
 
@@ -76,7 +76,7 @@ def readSettings(settingsFile,devname):
 
         return device
     except Exception as e:
-        cprint ("GPIO device support requires Adafruit python module.\npip3 install Adafruit_BBIO", "red")
+        logfile ("GPIO device support requires Adafruit python module.\npip3 install Adafruit_BBIO", "WARN")
         return None
 
 #- We'll use this later to turn on/off GPIO buttons and switches
@@ -104,7 +104,7 @@ def getSensor(sensorName,params):
         params['value'] = value
         return value
     except Exception as e:
-        cprint ("Error finding sensor %s in %s: %s" % (sensorName,devicename,e),"yellow")
+        logfile ("Error finding sensor %s in %s: %s" % (sensorName,devicename,e),"ERROR")
         traceback.print_exc()
     return False
 

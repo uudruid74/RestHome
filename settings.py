@@ -3,7 +3,6 @@ import configparser
 import netaddr
 import devices
 from os import path
-from termcolor import cprint
 
 applicationDir = path.dirname(path.abspath(__file__))
 settingsINI = path.join(applicationDir, 'settings.ini')
@@ -109,16 +108,16 @@ def backupSettings():
     try:
         shutil.copy2(settingsINI,settingsINI+".bak")
     except FileNotFoundError:
-        cprint ("\tNo settings.ini to backup.  Hope we're creating one!","yellow")
+        devices.logfile ("\tNo settings.ini to backup.  Hope we're creating one!","ERROR")
     except:
-        cprint ("Error in backup operation!  Refusing to continue!","red")
+        devices.logfile ("Error in backup operation!  Refusing to continue!","WARN")
         sys.exit()
 
 def restoreSettings():
     if path.isfile(settingsINI+".bak"):
         shutil.copy2(settingsINI+".bak",settingsINI)
     else:
-        cprint ("Can't find backup to restore!  Refusing to make this worse!","red")
+        devices.logfile ("Can't find backup to restore!  Refusing to make this worse!","WARN")
         sys.exit()
 
 
